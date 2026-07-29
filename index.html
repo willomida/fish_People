@@ -2127,6 +2127,20 @@ function isDarkNow() {
        || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
 }
 
+/* 지도를 우리나라 안에 묶는 범위 두 가지.
+   KOREA_VIEW : 눈에 보여야 할 국토 범위. 이만큼 담기는 배율이 '최대 축소' 한계가 된다.
+   KOREA_PAN  : 끌고 다닐 수 있는 한계. VIEW 보다 넉넉하게 잡는다.
+     ※ 화면이 maxBounds 보다 커지면 Leaflet 이 위치 계산을 못 해 지도가 엉킨다.
+        그래서 PAN 을 VIEW 보다 크게 두어 그런 상태가 생기지 않게 한다. */
+const KOREA_PAN = L.latLngBounds([31.5, 122.3], [40.2, 133.6]);
+
+/* 최대로 줄였을 때 보일 범위 = 낚시터 전체가 꽉 차는 만큼.
+   국토 전체 좌표로 잡으면, 지도 칸이 가로로 길고 세로가 짧아서
+   세로에 맞추다 보니 가로로 중국·일본까지 딸려 들어온다. */
+function koreaViewBounds() {
+  return L.latLngBounds(SPOTS.map(s => [s.lat, s.lon])).pad(0.15);
+}
+
 function initMap() {
   if (MAP.obj || typeof L === 'undefined') return MAP.obj;
   MAP.obj = L.map('minimap', {
@@ -2134,7 +2148,11 @@ function initMap() {
     /* 마우스 휠: 지도 위에서는 확대·축소, 지도 밖에서는 페이지가 그대로 스크롤된다.
        (Leaflet이 지도 칸 안에서만 휠을 가로챈다) */
     scrollWheelZoom: true,
-    zoomControl: true
+    zoomControl: true,
+    /* maxBounds 는 여기서 걸지 않는다 — 지도 칸 크기가 0인 상태에서 범위를 묶으면
+       첫 화면 맞춤이 엉뚱한 확대로 틀어진다. 크기가 잡힌 뒤 아래 whenReady 에서 건다. */
+    maxBoundsViscosity: 1.0,
+    maxZoom: 19
   });
   MAP.tiles = L.tileLayer(TILES[isDarkNow() ? 'dark' : 'light'], {
     maxZoom: 19,
@@ -2153,7 +2171,9 @@ function initMap() {
     if (MAP.didFit) return;
     MAP.didFit = true;
     setTimeout(() => {
-      if (!MAP.userMoved && MAP.lastList) fitNear(MAP.lastList);
+      /* 잠금을 먼저 걸고 나서 맞춘다 — 순서가 반대면 맞춘 뒤 잠금이 화면을 다시 흔든다 */
+      lockToKorea();
+      if (!MAP.userMoved && MAP.lastList) fitAll(MAP.lastList);
     }, 350);
   });
 
@@ -2211,11 +2231,13 @@ function drawMap(list, w) {
     if (a) a.onclick = () => { map.closePopup(); openSpot(a.dataset.openspot, w); };
   });
 
-  /* 사용자가 지도를 만진 뒤에는 보던 자리를 지켜준다 */
-  if (!MAP.userMoved) fitNear(list);
+  /* 처음에는 전국이 보이게 한다 — 낚시터가 전국에 흩어져 있어
+     내 주변만 잡아 주면 다른 지역에도 있다는 걸 알 수가 없다.
+     사용자가 지도를 만진 뒤에는 보던 자리를 지켜준다. */
+  if (!MAP.userMoved) fitAll(list);
 }
 
-/* 가까운 곳 위주로 화면을 맞춘다 — 18곳을 다 담으면 전국이 나와서 안 보인다.
+/* 내 주변에 맞춘다 (「내 위치로」 버튼용).
    ※ invalidateSize()를 fitBounds보다 '먼저' 불러야 한다. 순서를 바꾸면 지도가
       옛 크기를 기준으로 범위를 잡아, 가까운 곳인데도 화면 밖으로 밀려난다. */
 function fitNear(list) {
@@ -2228,17 +2250,49 @@ function fitNear(list) {
   else map.setView([LOC.lat, LOC.lon], 11, { animate:false });
   MAP.programmatic = false;
 }
+/* 지도를 우리나라 안에 묶는다.
+   '최대 축소' 한계는 화면 크기에 따라 달라지므로(휴대폰은 더 줄여야 전국이 담긴다)
+   지금 화면에서 국토가 꽉 차는 배율을 계산해서 그걸 한계로 삼는다.
+   화면 크기가 바뀌면 다시 불러야 한다. */
+function lockToKorea() {
+  const m = MAP.obj; if (!m) return;
+  /* setMinZoom·setMaxBounds 는 지도를 살짝 움직여 'zoomstart' 를 일으킨다.
+     표시해 두지 않으면 사용자가 만진 것으로 오해해 이후 자동 맞춤이 멈춘다. */
+  MAP.programmatic = true;
+  m.setMaxBounds(null);                       /* 계산 중에는 잠시 풀어 둔다 */
+  const fit = m.getBoundsZoom(koreaViewBounds());   /* 낚시터 전체가 꽉 차는 배율 */
+  m.setMinZoom(fit);
+  m.setMaxBounds(KOREA_PAN);
+  MAP.minZoom = fit;
+  MAP.programmatic = false;
+}
+
+/* 전국이 다 보이게 맞춘다 (첫 화면 · 「전체 보기」 버튼).
+   fitNear 와 마찬가지로 애니메이션을 끈다 — 켜 두면 이동이 끝나기 전 값이
+   잠깐 읽혀 확대가 엉뚱하게 보고되고, 화면이 멈춘 탭에서는 아예 중간에 선다. */
 function fitAll(list) {
   const map = MAP.obj; if (!map || !list.length) return;
   const pts = [[LOC.lat, LOC.lon]].concat(list.map(x => [x.sp.lat, x.sp.lon]));
   MAP.programmatic = true;
   map.invalidateSize();
-  map.fitBounds(L.latLngBounds(pts).pad(0.15));
-  setTimeout(() => { MAP.programmatic = false; }, 400);   /* 움직임이 끝난 뒤 해제 */
+  map.fitBounds(L.latLngBounds(pts).pad(0.15), { animate:false });
+  MAP.programmatic = false;
 }
 
+/* 화면 크기가 바뀌면(회전·창 조절) 전국이 담기는 배율이 달라진다 — 다시 계산한다.
+   아직 사용자가 지도를 만지지 않았다면 전국 보기도 다시 맞춘다. */
+let korLockTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(korLockTimer);
+  korLockTimer = setTimeout(() => {
+    if (!MAP.obj) return;
+    lockToKorea();
+    if (!MAP.userMoved && MAP.lastList) fitAll(MAP.lastList);
+  }, 250);
+});
+
 /* 지도 아래 두 버튼 — 누른 뒤에는 그 화면을 그대로 둔다 */
-$('#map-me').onclick  = () => { if (MAP.obj) { MAP.userMoved = true; MAP.obj.setView([LOC.lat, LOC.lon], 12); } };
+$('#map-me').onclick  = () => { MAP.userMoved = true; fitNear(MAP.lastList || []); };
 $('#map-all').onclick = () => { MAP.userMoved = true; fitAll(MAP.lastList || []); };
 
 /* F-2 상세 + F-3 후기 */
