@@ -1590,7 +1590,7 @@ const Vision = (() => {
    0. 상태
    ══════════════════════════════════════════════════════════ */
 const KEY = 'fishdex.v1';
-const DEFAULT_LOC = { lat: 35.4356, lon: 126.7019, name: '고창읍 (기본 위치)' };
+const DEFAULT_LOC = { lat: 37.5665, lon: 126.9780, name: '서울 (기본 위치)' };
 
 let S = load();
 let LOC = { ...DEFAULT_LOC };
@@ -3327,7 +3327,7 @@ function openLocModal(note) {
         ${REGIONS.map((r,i) => `<option value="${i}">${esc(r.name)}</option>`).join('')}
       </select>
     </div>
-    <button class="ghost wide" id="loc-reset">기본 위치(고창읍)로 되돌리기</button>
+    <button class="ghost wide" id="loc-reset">기본 위치로 되돌리기</button>
   `);
   $('#loc-auto').onclick = () => { closeModal(); locate(true); };
   $('#loc-map').onclick  = pickOnMap;
