@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<!-- ============================================================================
+  PRD 요구사항 그래프 템플릿 — Claude용 사용 지침
+  ----------------------------------------------------------------------------
+  1) 이 파일을 복사한다.
+  2) 파일 맨 아래, 바로 위에 [교체지점] 마커가 붙은 데이터 블록의 여닫는 태그
+     사이 JSON만 통째로 실제 데이터로 바꾼다. (스키마: SKILL.md "출력 형식")
+     ※ 함정 주의: 이 안내 주석에는 그 블록의 태그 문자를 일부러 넣지 않았다.
+        그래서 파일에서 id 가 graph-data 인 블록은 '딱 한 곳'(실제 데이터)만 나온다.
+        그 한 곳만 교체하면 된다. (예전에는 이 주석에도 같은 태그가 있어,
+        순진하게 첫 매치를 바꾸면 주석에 주입되고 진짜 샘플이 남는 지뢰가 있었다.)
+  3) "요구사항그래프_<별칭>.html" 로 저장한다. (별칭 = 공백 없는 짧은 이름)
+  ----------------------------------------------------------------------------
+  - HTML/CSS/JS 본문은 건드리지 않는다. JSON만 정확히 채우면 트리가 자동 렌더링된다.
+  - 외부 라이브러리/인터넷 불필요(자기완결형). 브라우저로 더블클릭하면 열린다.
+  - 노드를 클릭하면 하위가 접히고 펼쳐진다. 라이트/다크 테마 자동 대응.
+  - 교체 후 반드시 브라우저로 열어(렌더 화면으로) 샘플('우리 반 익명 건의함')이 아니라
+    내 데이터가 뜨는지 확인한다. ※ 이 안내 주석에 적힌 샘플 이름은 교체 후에도 파일에
+    그대로 남는다(정상). 그러니 raw 텍스트 검색이 아니라 '브라우저 렌더 화면'으로 판정할 것.
+============================================================================ -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>요구사항 그래프</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1a1d24; --muted: #6b7280;
+    --line: #e3e6eb; --accent: #4f46e5;
+    --r-bar: #4f46e5; --f-bar: #0ea5e9; --s-bar: #94a3b8;
+    --hi: #e11d48; --hi-bg: #fee2e2; --md: #d97706; --md-bg: #fef3c7; --lo: #64748b; --lo-bg: #eef2f6;
+    --chip: #eef2ff; --chip-ink: #4338ca;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --panel: #181b22; --ink: #e6e8ec; --muted: #9aa2ad;
+      --line: #2a2f3a; --accent: #818cf8;
+      --r-bar: #818cf8; --f-bar: #38bdf8; --s-bar: #64748b;
+      --hi: #fb7185; --hi-bg: #4c1d24; --md: #fbbf24; --md-bg: #422f0a; --lo: #94a3b8; --lo-bg: #232833;
+      --chip: #26304d; --chip-ink: #c7d2fe;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; line-height: 1.55; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 28px 18px 80px; }
+
+  header.top { margin-bottom: 18px; }
+  .eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  h1 { margin: 4px 0 6px; font-size: 26px; }
+  .mode-tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+    background: var(--chip); color: var(--chip-ink); vertical-align: middle; margin-left: 8px; }
+  .stats { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; box-shadow: var(--shadow); }
+  .stat b { font-size: 20px; } .stat span { color: var(--muted); font-size: 12px; margin-left: 6px; }
+
+  .controls { display: flex; gap: 8px; margin: 16px 0 10px; }
+  .controls button { font: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink); padding: 6px 12px; border-radius: 8px; }
+  .controls button:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* PRD panel */
+  details.prd { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); margin-bottom: 22px; overflow: hidden; }
+  details.prd > summary { cursor: pointer; padding: 14px 18px; font-weight: 700; font-size: 15px; list-style: none; display: flex; align-items: center; gap: 8px; }
+  details.prd > summary::-webkit-details-marker { display: none; }
+  details.prd > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+  details.prd[open] > summary::before { transform: rotate(90deg); }
+  .prd-grid { padding: 0 18px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .prd-grid { grid-template-columns: 1fr; } }
+  .prd-sec h3 { margin: 8px 0 4px; font-size: 13px; color: var(--accent); }
+  .prd-sec p { margin: 0 0 8px; font-size: 14px; }
+  .prd-sec .field { color: var(--muted); font-size: 12px; }
+  .prd-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+
+  /* Tree */
+  .tree { display: flex; flex-direction: column; gap: 10px; }
+  .node { border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); }
+  .node.R { border-left-color: var(--r-bar); }
+  .node.F { border-left-color: var(--f-bar); }
+  .node.S { border-left-color: var(--s-bar); }
+  .node-head { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; cursor: pointer; }
+  .node-head.leaf { cursor: default; }
+  .caret { color: var(--muted); font-size: 12px; margin-top: 3px; width: 12px; flex: none; transition: transform .15s; }
+  .node.collapsed > .node-head .caret { transform: rotate(-90deg); }
+  .caret.hidden { visibility: hidden; }
+  .tag { font-size: 10px; font-weight: 800; letter-spacing: .05em; padding: 2px 6px; border-radius: 6px; margin-top: 2px; flex: none; }
+  .tag.R { background: var(--r-bar); color: #fff; } .tag.F { background: var(--f-bar); color: #fff; } .tag.S { background: var(--s-bar); color: #fff; }
+  .node-title { flex: 1; }
+  .node-title .name { font-weight: 650; font-size: 15px; }
+  .node.S .node-title .name { font-size: 14px; font-weight: 550; }
+  .node-title .desc { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .imp { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-top: 2px; flex: none; }
+  .imp.high { background: var(--hi-bg); color: var(--hi); } .imp.medium { background: var(--md-bg); color: var(--md); } .imp.low { background: var(--lo-bg); color: var(--lo); }
+  .children { padding: 0 14px 12px 30px; display: flex; flex-direction: column; gap: 8px; }
+  .node.collapsed > .children { display: none; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--chip-ink); }
+  .ac { margin: 8px 0 0; padding: 8px 10px; background: var(--lo-bg); border-radius: 8px; }
+  .ac .ac-t { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+  .ac ul { margin: 0; padding-left: 16px; } .ac li { font-size: 12px; margin: 2px 0; }
+  footer { margin-top: 30px; color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">PRD · 요구사항 그래프</div>
+    <h1 id="proj">프로젝트</h1>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <details class="prd" open>
+    <summary>📄 PRD 요약 (제품 요구사항 문서)</summary>
+    <div class="prd-grid" id="prd"></div>
+  </details>
+
+  <div class="controls">
+    <button onclick="setAll(false)">전체 펼치기</button>
+    <button onclick="setAll(true)">전체 접기</button>
+  </div>
+  <div class="tree" id="tree"></div>
+
+  <footer>노드를 클릭하면 하위 항목이 접히고 펼쳐집니다 · prd-graph 스킬로 생성</footer>
+</div>
+
+<!-- [교체지점] 아래 블록의 JSON만 통째로 교체하세요. 이 블록은 파일에 하나뿐입니다. -->
+<script id="graph-data" type="application/json">
+{
+  "project": "낚시 민족",
+  "mode": "simple",
+  "prd": {
+    "subject": "낚시가 취미인 시니어가 '오늘 갈까?'부터 '뭘 잡았나'까지 한 앱에서 해결하는 낚시 도우미",
+    "goal": "출조 전 날씨 판단, 현장에서의 안전·규제 확인, 다녀온 뒤 기록 남기기를 한 흐름으로 묶는다. 시니어가 낚시라는 취미를 더 자주, 더 안전하게, 더 재미있게 즐기게 하는 것이 목표다.",
+    "background": "낚시 정보는 카페·블로그·전문 앱에 흩어져 있고 글씨가 작아 시니어가 보기 어렵다. 금어기나 보호종처럼 모르면 법을 어기게 되는 정보도 찾아보기 번거롭다. 스마트폰을 쓸 줄은 알지만 앱 여러 개를 오가는 건 부담스러운 세대에게, 큰 글씨로 답만 알려주는 도구가 필요하다.",
+    "userProblem": "오늘 낚시 가도 좋은 날인지 판단하려면 날씨 앱을 여러 개 봐야 한다. 잡은 물고기가 잡아도 되는 물고기인지, 먹어도 안전한지 그 자리에서 알기 어렵다. 다녀온 기록은 사진첩에 흩어져 남아 돌아보거나 자랑하기 어렵다.",
+    "solution": "날씨를 0~100 '낚시 점수' 하나와 한 문장 이유로 바꿔 보여준다. 잡은 물고기는 사진을 올려 어종 후보를 받고 도감에 저장하며, 저장하는 그 순간 금어기·보호종·기생충 경고를 자동으로 띄운다.",
+    "differentiation": "기존 낚시 앱은 정보량이 많고 글씨가 작아 전문 낚시인 중심이다. 이 앱은 '오늘 가도 되나', '이거 잡아도 되나'에 한 문장으로 먼저 답한다. 큰 글씨와 소리내어 읽어주기를 기본으로 깐다.",
+    "targetUser": "전북 고창에 사는 67세 김병국 님. 부부가 함께 낚시를 다니고 차가 있어 인근 낚시터로 이동한다. 사진 찍기와 메신저는 익숙하지만, 앱을 여러 개 오가며 정보를 맞춰보는 일은 번거로워한다.",
+    "scenario": "아침에 앱을 열면 '오늘 82점, 바람이 약해 가기 좋습니다'가 큰 글씨로 뜬다. 추천 스팟 중 주차가 되는 곳을 골라 길을 나선다. 붕어를 잡아 사진을 올리니 어종 후보로 '붕어'가 뜨고, 길이 24cm를 직접 입력해 도감에 저장한다. 저장할 때 '민물고기는 회로 드시면 안 됩니다' 안내가 함께 뜬다. 저녁에는 자랑 카드를 만들어 낚시 친구에게 메신저로 보낸다.",
+    "kpi": "한 달에 도감 기록 8건 이상 저장. 출조한 날의 80% 이상이 앱에서 '좋음' 판정을 받은 날.",
+    "risk": "사진만으로 어종을 정확히 맞히기 어려워 오판할 수 있다(후보 제시 + 사용자 확정으로 완화). 금어기·보호종 기준은 법령이 바뀌어 데이터가 낡을 수 있다. 사진 한 장으로 길이(cm)를 자동 측정하는 것은 원리상 불가능하므로 직접 입력 또는 기준 물체 촬영으로 대체한다.",
+    "category": "lifestyle",
+    "roles": ["낚시인", "낚시 친구"],
+    "devices": ["모바일 웹"]
+  },
+  "requirements": [
+    {
+      "id": "R-1",
+      "name": "오늘의 낚시 날씨 판단",
+      "importance": "high",
+      "description": "바람·비·기온·기압을 '낚시하기 좋은 날인가'라는 하나의 답으로 바꿔주는 능력 영역. 무료 날씨 데이터를 그대로 쓰며, 조석(물때)과 장기 예보는 이 영역에 넣지 않는다.",
+      "acceptanceCriteria": [
+        "앱을 열면 오늘의 낚시 점수와 '가도 좋다/피하는 게 낫다'가 큰 글씨로 보인다",
+        "왜 그 점수인지 이유를 한 문장으로 알 수 있다",
+        "자주 가는 낚시터를 골라 그 지점 기준으로 다시 볼 수 있다"
+      ],
+      "features": [
+        {
+          "id": "F-1",
+          "name": "오늘의 낚시 점수",
+          "importance": "high",
+          "description": "바람·강수·기온·기압을 0~100점으로 계산해 '좋음/보통/나쁨'과 한 줄 이유를 보여준다. 시간대별 상세 그래프는 빼고 오늘 하루 요약만 다룬다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": [
+            {
+              "id": "S-1",
+              "name": "큰 글씨와 읽어주기",
+              "importance": "high",
+              "description": "점수와 이유를 화면 가득한 큰 글씨로 띄우고, 읽어주기 버튼을 누르면 소리로 들려준다. 시니어가 안경 없이도 확인할 수 있게 하는 것이 목적이다.",
+              "roles": ["낚시인"],
+              "devices": ["모바일 웹"]
+            }
+          ]
+        },
+        {
+          "id": "F-2",
+          "name": "내 낚시터 골라보기",
+          "importance": "high",
+          "description": "자주 가는 낚시터 몇 곳을 목록에서 골라 그 지점 날씨로 점수를 다시 계산한다. 지도 검색이나 즐겨찾기 편집은 빼고, 미리 정리해둔 목록에서 고르기만 한다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        },
+        {
+          "id": "F-3",
+          "name": "이번 주 언제 갈까",
+          "importance": "medium",
+          "description": "앞으로 3일치 점수를 나란히 비교해 가장 좋은 날을 짚어준다. 주간 상세 예보는 보여주지 않고 '이 날이 제일 낫습니다' 한 줄로 답한다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        }
+      ]
+    },
+    {
+      "id": "R-2",
+      "name": "낚시 꿀스팟 추천",
+      "importance": "medium",
+      "description": "오늘 날씨에 맞춰 갈 만한 낚시터를 골라주는 능력 영역. 스팟 정보는 미리 정리해둔 고창·전북 인근 목록에서 고른다. 사용자가 새 스팟을 등록하거나 실시간 조황을 공유하는 기능은 포함하지 않는다.",
+      "acceptanceCriteria": [
+        "오늘 조건에 맞는 낚시터를 3곳 이내로 추천받는다",
+        "추천 이유를 한 줄로 확인할 수 있다",
+        "각 스팟의 어종과 주차·화장실 여부를 알 수 있다"
+      ],
+      "features": [
+        {
+          "id": "F-4",
+          "name": "오늘의 추천 스팟",
+          "importance": "medium",
+          "description": "오늘 바람·비 조건에 덜 영향받는 곳 위주로 낚시터를 최대 3곳 추천하고, 왜 추천했는지 한 줄로 설명한다. 순위 알고리즘을 복잡하게 만들지 않고 날씨와 어종 궁합만 본다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        },
+        {
+          "id": "F-5",
+          "name": "스팟 상세 정보",
+          "importance": "medium",
+          "description": "주요 어종, 민물/바다 구분, 주차·화장실·평평한 길 여부처럼 시니어에게 실제로 중요한 정보를 카드 한 장으로 보여준다. 실시간 혼잡도나 유료 정산은 다루지 않는다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": [
+            {
+              "id": "S-2",
+              "name": "길찾기 넘기기",
+              "importance": "low",
+              "description": "스팟 카드에서 버튼 한 번으로 휴대폰의 지도 앱 길찾기로 넘어간다. 앱 안에 지도를 직접 그리지는 않는다.",
+              "roles": ["낚시인"],
+              "devices": ["모바일 웹"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R-3",
+      "name": "잡은 물고기 기록·도감",
+      "importance": "high",
+      "description": "잡은 물고기를 사진과 함께 기록해 나만의 도감으로 쌓는 능력 영역. 사진으로 어종을 '추측'해 후보를 보여주되 최종 확정은 사용자가 한다. 길이는 직접 입력하거나 기준 물체를 함께 찍어 어림하며, 사진 한 장만으로 cm를 자동 측정하지는 않는다(사진에 크기 기준이 없어 원리상 불가능).",
+      "acceptanceCriteria": [
+        "사진·어종·길이를 넣어 물고기 한 마리를 도감에 저장할 수 있다",
+        "저장한 기록이 날짜·장소와 함께 목록으로 남는다",
+        "어종 후보가 틀리면 사용자가 직접 고쳐 저장할 수 있다"
+      ],
+      "features": [
+        {
+          "id": "F-6",
+          "name": "물고기 기록 남기기",
+          "importance": "high",
+          "description": "휴대폰으로 찍은 사진 한 장을 올리면 날짜와 장소가 자동으로 채워진 기록 화면이 열린다. 여러 장 업로드와 사진 보정은 빼고 대표 사진 한 장만 다룬다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        },
+        {
+          "id": "F-7",
+          "name": "사진으로 어종 추측",
+          "importance": "high",
+          "description": "올린 사진을 보고 어종 후보를 2~3개 제시하면 사용자가 그중에서 고른다. 정확도를 보장할 수 없으므로 '추측입니다'를 화면에 분명히 밝히고, 확정은 반드시 사람이 한다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": [
+            {
+              "id": "S-3",
+              "name": "후보가 다 틀릴 때 직접 고르기",
+              "importance": "high",
+              "description": "제시된 후보가 모두 틀리면 어종 목록에서 직접 골라 저장한다. 후보 없이도 기록을 끝까지 마칠 수 있어야 한다.",
+              "roles": ["낚시인"],
+              "devices": ["모바일 웹"]
+            }
+          ]
+        },
+        {
+          "id": "F-8",
+          "name": "길이 기록",
+          "importance": "high",
+          "description": "길이는 사용자가 숫자로 직접 입력하는 것을 기본으로 한다. 사진만으로는 크기를 알 수 없기 때문이다. 자·신용카드 같은 기준 물체를 함께 찍은 경우에만 비율로 어림값을 제안하고, 최종 값은 사용자가 확인해 저장한다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": [
+            {
+              "id": "S-4",
+              "name": "기준 물체로 어림하기",
+              "importance": "medium",
+              "description": "물고기 옆에 신용카드나 자를 놓고 찍으면 그 길이를 기준으로 어림 cm를 제안한다. 어림값임을 표시하고 사용자가 고칠 수 있게 한다.",
+              "roles": ["낚시인"],
+              "devices": ["모바일 웹"]
+            }
+          ]
+        },
+        {
+          "id": "F-9",
+          "name": "내 도감 보기",
+          "importance": "high",
+          "description": "저장한 물고기를 어종별 카드로 모아 보여주고, 같은 어종은 가장 큰 기록을 대표로 세운다. 검색·필터는 넣지 않고 어종별 카드 목록 하나로 단순하게 유지한다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        }
+      ]
+    },
+    {
+      "id": "R-4",
+      "name": "어종 안전·규제 정보",
+      "importance": "high",
+      "description": "잡은 물고기를 지금 잡아도 되는지, 먹어도 안전한지 알려주는 능력 영역. 보호종·금어기·기생충 주의를 어종 카드 한 장에 모은다. 법률 자문이나 신고 대행은 하지 않고 공개된 기준을 쉬운 말로 안내만 한다.",
+      "acceptanceCriteria": [
+        "어종을 고르면 오늘이 금어기인지 한눈에 보인다",
+        "보호종이면 기록을 저장하는 시점에 경고가 뜬다",
+        "민물 어종은 생식 섭취 위험 안내가 함께 보인다"
+      ],
+      "features": [
+        {
+          "id": "F-10",
+          "name": "금어기·보호종 경고",
+          "importance": "high",
+          "description": "기록하려는 어종이 보호종이거나 오늘이 금어기면 저장 화면에 빨간 경고와 '놓아주세요' 안내를 띄운다. 신고 접수나 과태료 계산은 포함하지 않는다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": [
+            {
+              "id": "S-5",
+              "name": "오늘 날짜 기준 금어기 판정",
+              "importance": "high",
+              "description": "어종별 금어기 기간과 오늘 날짜를 비교해 '지금은 잡으면 안 됩니다 / 잡아도 됩니다'를 문장으로 알려준다. 기간이 지나면 자동으로 판정이 바뀐다.",
+              "roles": ["낚시인"],
+              "devices": ["모바일 웹"]
+            }
+          ]
+        },
+        {
+          "id": "F-11",
+          "name": "어종 정보 카드",
+          "importance": "high",
+          "description": "어종별로 잡을 수 있는 크기 제한, 금어기 기간, 보호종 여부, 손질·섭취 주의를 큰 글씨 카드 한 장에 모아 보여준다. 학술적 분류 정보나 사진 도감은 넣지 않는다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        },
+        {
+          "id": "F-12",
+          "name": "민물 기생충 주의 안내",
+          "importance": "high",
+          "description": "민물 어종을 기록하면 간흡충 같은 생식 위험과 '익혀 드세요' 안내를 자동으로 붙인다. 증상 진단이나 치료 안내는 하지 않고, 날로 먹지 말라는 경고까지만 다룬다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        }
+      ]
+    },
+    {
+      "id": "R-5",
+      "name": "친구와 나누는 재미",
+      "importance": "low",
+      "description": "기록을 남과 나누고 서로 견주며 계속하게 만드는 능력 영역. 계정과 친구 연결이 필요해 무거우므로, 1차에서는 로그인 없이 되는 '자랑 카드 공유'와 '내 기록 안에서의 순위'로 가볍게 잡는다. 진짜 친구 목록과 실시간 랭킹은 나중 과제로 미룬다.",
+      "acceptanceCriteria": [
+        "기록 하나를 사진 한 장으로 만들어 메신저로 보낼 수 있다",
+        "로그인 없이도 내 기록만으로 순위와 빈 칸을 볼 수 있다"
+      ],
+      "features": [
+        {
+          "id": "F-13",
+          "name": "자랑 카드 공유",
+          "importance": "medium",
+          "description": "저장한 기록을 어종·길이·날짜가 박힌 사진 한 장으로 만들어 카카오톡 같은 기존 메신저로 보낸다. 앱 안의 친구 목록이나 댓글은 만들지 않는다.",
+          "roles": ["낚시인", "낚시 친구"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        },
+        {
+          "id": "F-14",
+          "name": "도감 채우기 도전",
+          "importance": "medium",
+          "description": "아직 못 잡은 어종을 빈 칸으로 보여주고 채우면 도장을 찍어준다. 내 어종별 최고 길이와 이 달 잡은 마리 수도 여기서 순위로 본다. 별도 미니게임은 만들지 않고 도감 자체를 게임처럼 쓰는 방식이다.",
+          "roles": ["낚시인"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        },
+        {
+          "id": "F-15",
+          "name": "친구 추가·친구끼리 랭킹",
+          "importance": "low",
+          "description": "계정을 만들어 친구를 추가하고 친구들 사이 최고 기록 랭킹을 겨루는 기능. 로그인과 서버가 필요해 규모가 크게 늘어나므로 1차 개발 범위에서는 빼고 나중 과제로 남긴다.",
+          "roles": ["낚시인", "낚시 친구"],
+          "devices": ["모바일 웹"],
+          "specs": []
+        }
+      ]
+    }
+  ]
+}
+</script>
+
+<script>
+  const data = JSON.parse(document.getElementById("graph-data").textContent);
+  const MODE = { simple: "간단 모드", detail: "상세 모드", "": "" };
+
+  document.title = "요구사항 그래프 · " + (data.project || "");
+  const modeLabel = MODE[data.mode] || "";
+  document.getElementById("proj").innerHTML =
+    (data.project || "프로젝트") + (modeLabel ? ' <span class="mode-tag">' + modeLabel + "</span>" : "");
+
+  // ---- stats ----
+  let rC = 0, fC = 0, sC = 0;
+  (data.requirements || []).forEach(r => { rC++; (r.features || []).forEach(f => { fC++; sC += (f.specs || []).length; }); });
+  document.getElementById("stats").innerHTML =
+    stat(rC, "요구사항") + stat(fC, "기능") + stat(sC, "스펙");
+  function stat(n, l) { return '<div class="stat"><b>' + n + "</b><span>" + l + "</span></div>"; }
+
+  // ---- PRD ----
+  const p = data.prd || {};
+  const sec = (title, rows) => {
+    const body = rows.filter(r => r[1]).map(r => '<div class="field">' + r[0] + "</div><p>" + esc(r[1]) + "</p>").join("");
+    return body ? '<div class="prd-sec"><h3>' + title + "</h3>" + body + "</div>" : "";
+  };
+  let prdHtml =
+    sec("① 개요", [["한 줄 정의", p.subject], ["목표", p.goal], ["배경", p.background]]) +
+    sec("② 핵심가치", [["사용자 문제", p.userProblem], ["해결 방안", p.solution], ["차별점", p.differentiation]]) +
+    sec("③ 타겟·시나리오", [["타겟 사용자", p.targetUser], ["시나리오", p.scenario]]) +
+    sec("④ 성공지표", [["핵심 지표(KPI)", p.kpi], ["리스크", p.risk]]);
+  const metaChips = []
+    .concat(p.category ? ['<span class="chip">📂 ' + esc(p.category) + "</span>"] : [])
+    .concat((p.roles || []).map(r => '<span class="chip">👤 ' + esc(r) + "</span>"))
+    .concat((p.devices || []).map(d => '<span class="chip">🖥 ' + esc(d) + "</span>"));
+  if (metaChips.length) prdHtml += '<div class="prd-meta">' + metaChips.join("") + "</div>";
+  document.getElementById("prd").innerHTML = prdHtml;
+
+  // ---- Tree ----
+  document.getElementById("tree").innerHTML = (data.requirements || []).map(r => reqNode(r)).join("");
+
+  function reqNode(r) {
+    const kids = (r.features || []).map(f => featNode(f)).join("");
+    let acc = "";
+    if (r.acceptanceCriteria && r.acceptanceCriteria.length) {
+      acc = '<div class="ac"><div class="ac-t">✔ 수락기준</div><ul>' +
+        r.acceptanceCriteria.map(a => "<li>" + esc(a) + "</li>").join("") + "</ul></div>";
+    }
+    return nodeShell("R", r, acc, kids, kids !== "");
+  }
+  function featNode(f) {
+    const kids = (f.specs || []).map(s => nodeShell("S", s, chips(s), "", false)).join("");
+    return nodeShell("F", f, chips(f), kids, kids !== "");
+  }
+  function chips(x) {
+    const c = [].concat((x.roles || []).map(r => '<span class="chip">👤 ' + esc(r) + "</span>"))
+                .concat((x.devices || []).map(d => '<span class="chip">🖥 ' + esc(d) + "</span>"));
+    return c.length ? '<div class="chips">' + c.join("") + "</div>" : "";
+  }
+  function nodeShell(kind, item, extra, childrenHtml, hasKids) {
+    const imp = item.importance ? '<span class="imp ' + item.importance + '">' + impLabel(item.importance) + "</span>" : "";
+    const caret = '<span class="caret ' + (hasKids ? "" : "hidden") + '">▾</span>';
+    const head =
+      '<div class="node-head ' + (hasKids ? "" : "leaf") + '" onclick="toggle(this)">' +
+        caret +
+        '<span class="tag ' + kind + '">' + kind + "</span>" +
+        '<div class="node-title"><div class="name">' + esc(item.name || "") + "</div>" +
+          (item.description ? '<div class="desc">' + esc(item.description) + "</div>" : "") +
+          extra +
+        "</div>" + imp +
+      "</div>";
+    const kids = childrenHtml ? '<div class="children">' + childrenHtml + "</div>" : "";
+    return '<div class="node ' + kind + '">' + head + kids + "</div>";
+  }
+  function impLabel(i) { return i === "high" ? "높음" : i === "low" ? "낮음" : "보통"; }
+  function toggle(el) {
+    const node = el.closest(".node");
+    if (node.querySelector(":scope > .children")) node.classList.toggle("collapsed");
+  }
+  function setAll(collapsed) {
+    document.querySelectorAll(".node").forEach(n => {
+      if (n.querySelector(":scope > .children")) n.classList.toggle("collapsed", collapsed);
+    });
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+</script>
+</body>
+</html>

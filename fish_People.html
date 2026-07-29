@@ -1,0 +1,3226 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b4f6c">
+<link rel="shortcut icon" href="logo.png" type="image/x-icon">
+<title>낚시 민족 — 날씨 보고 나가서, 사진 한 장으로 기록하세요</title>
+<!-- 진짜 지도 (Leaflet + OpenStreetMap) — API 키가 필요 없어 file:// 에서도 열린다 -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- 화면 아이콘 (Google Material Symbols) — 날씨 표시 이모지는 그대로 두고 UI만 이걸 쓴다 -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block">
+<style>
+/* ============================================================
+   낚시 도감 — 스타일
+   물가에서 한 손으로 쓰는 화면. 큰 글씨, 큰 터치 영역, 높은 대비.
+   ============================================================ */
+
+:root{
+  --sea:#0b4f6c; --sea-d:#083a50; --sea-l:#1d7fa8;
+  --bg:#f2f5f7; --panel:#ffffff; --line:#dfe5ea;
+  --text:#12222b; --muted:#63757f;
+  --ok:#0f8a5f; --warn:#c77700; --bad:#c62828;
+  --ok-bg:#e3f6ee; --warn-bg:#fdf3e0; --bad-bg:#fdeaea;
+  --gold:#c9a227;
+  --shadow:0 2px 10px rgba(10,40,60,.08);
+  --tabh:60px;
+}
+/* 어두운 화면 —
+   ① 아무것도 안 고르면 휴대폰 설정을 따라가고
+   ② 사용자가 한 번 고르면 :root[data-theme] 이 그걸 항상 이긴다. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --sea:#1d7fa8; --sea-d:#0b4f6c; --sea-l:#4cb3dd;
+    --bg:#0e1519; --panel:#18242b; --line:#26363f;
+    --text:#e6edf1; --muted:#94a6b0;
+    --ok:#3ecf8e; --warn:#e0a44a; --bad:#f26d6d;
+    --ok-bg:#12332a; --warn-bg:#332918; --bad-bg:#381e1e;
+    --shadow:0 2px 10px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --sea:#1d7fa8; --sea-d:#0b4f6c; --sea-l:#4cb3dd;
+  --bg:#0e1519; --panel:#18242b; --line:#26363f;
+  --text:#e6edf1; --muted:#94a6b0;
+  --ok:#3ecf8e; --warn:#e0a44a; --bad:#f26d6d;
+  --ok-bg:#12332a; --warn-bg:#332918; --bad-bg:#381e1e;
+  --shadow:0 2px 10px rgba(0,0,0,.35);
+}
+
+/* ── 아이콘 (Material Symbols) ───────────────────────
+   .ms 하나로 쓴다. 글자(리거처)로 그려지므로 크기·색은 font-size/color 로 맞춘다.
+   ※ 날씨를 나타내는 이모지(☀️🌧️ 등)는 일부러 그대로 뒀다 — 색이 있어 한눈에 들어온다. */
+.ms{
+  font-family:'Material Symbols Rounded'; font-weight:normal; font-style:normal;
+  line-height:1; letter-spacing:normal; text-transform:none; display:inline-block;
+  white-space:nowrap; direction:ltr; vertical-align:middle;
+  -webkit-font-feature-settings:'liga'; -webkit-font-smoothing:antialiased;
+  font-variation-settings:'FILL' 0,'wght' 400,'opsz' 24;
+}
+.ms.fill{font-variation-settings:'FILL' 1,'wght' 400,'opsz' 24}
+/* 작은 버튼 안에서는 글자 크기를 따라가면 아이콘이 너무 작아진다 — 따로 키운다 */
+.mini .ms{font-size:15px; margin-right:2px}
+.dir-btn .ms{font-size:19px; margin-right:4px}
+.primary .ms, .ghost .ms{font-size:20px; margin-right:5px}
+.icon-btn .ms{font-size:21px}
+.like .ms{font-size:17px; margin-right:3px}
+/* 순위 메달 */
+.medal{font-size:24px}
+.medal.m0{color:var(--gold)} .medal.m1{color:#9aa5ad} .medal.m2{color:#b1703c}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  font-size:16px; line-height:1.55; padding-bottom:calc(var(--tabh) + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%}
+button,input,select{font:inherit;color:inherit}
+
+/* ── 상단 바 ─────────────────────────────────────────── */
+#topbar{
+  position:sticky; top:0; z-index:30;
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; padding:12px 16px calc(12px);
+  background:linear-gradient(180deg,var(--sea),var(--sea-d)); color:#fff;
+  padding-top:calc(12px + env(safe-area-inset-top));
+}
+.brand{display:flex; align-items:center; gap:10px; flex:1; min-width:0}
+/* 로고 — 원본이 흰 바탕이라 남색 상단바에서 뜨지 않게 흰 타일 안에 넣는다 */
+.brand-icon{
+  flex:0 0 auto; display:block; height:34px; width:auto;
+  background:#fff; border-radius:9px; padding:2px 5px;
+  box-shadow:0 1px 4px rgba(0,0,0,.28);
+}
+@media (max-width:400px){ .brand-icon{height:28px; padding:2px 4px; border-radius:7px} }
+.brand > div{min-width:0}
+.brand strong{display:block; font-size:17px; letter-spacing:-.01em}
+/* 좁은 화면에서 날씨 위젯에 밀려 세 줄로 접히지 않게 한 줄로 자른다 */
+.brand small{display:block; font-size:12px; opacity:.8;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.icon-btn{
+  background:rgba(255,255,255,.15); border:0; color:#fff;
+  width:40px; height:40px; border-radius:12px; font-size:19px; cursor:pointer;
+}
+.icon-btn:active{background:rgba(255,255,255,.3)}
+
+/* ── 상단 실시간 날씨 위젯 ──────────────────────────── */
+.wx-btn{
+  display:flex; align-items:center; gap:8px; flex:0 0 auto;
+  background:rgba(255,255,255,.15); border:0; color:#fff;
+  border-radius:14px; padding:6px 12px 6px 10px; cursor:pointer;
+  transition:opacity .2s;
+}
+.wx-btn:active{background:rgba(255,255,255,.3)}
+.wx-btn.loading{opacity:.5}
+.wx-ico{font-size:23px; line-height:1}
+.wx-t{display:flex; flex-direction:column; align-items:flex-start; line-height:1.2}
+.wx-t b{font-size:17px; font-weight:800; letter-spacing:-.02em}
+.wx-t small{display:flex; align-items:center; gap:4px; font-size:10.5px;
+  opacity:.85; white-space:nowrap}
+.wx-live{
+  width:6px; height:6px; border-radius:50%; background:#4ade80;
+  flex:0 0 6px; animation:pulse 2s ease-in-out infinite;
+}
+.wx-live.off{background:#facc15; animation:none}   /* 예시 값일 때 */
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+@media (prefers-reduced-motion: reduce){ .wx-live{animation:none} }
+@media (max-width:400px){
+  .wx-ico{font-size:20px}
+  .wx-t b{font-size:15px}
+  .wx-btn{padding:5px 10px 5px 8px; gap:6px}
+}
+
+/* ── 화면 전환 ───────────────────────────────────────── */
+#app{max-width:720px; margin:0 auto; padding:16px}
+.screen{display:none}
+.screen.on{display:block; animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.hide{display:none !important}
+
+.sec-title{font-size:15px; margin:24px 0 10px; letter-spacing:-.01em}
+.sec-title small{font-weight:400; color:var(--muted); font-size:13px; margin-left:6px}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:14px;
+  padding:14px 16px; box-shadow:var(--shadow); margin-bottom:12px}
+.note{font-size:13px; color:var(--muted); background:var(--panel);
+  border:1px dashed var(--line); border-radius:10px; padding:10px 12px; margin:10px 0}
+.fine{font-size:12px; color:var(--muted); line-height:1.6}
+.disclaimer{margin-top:20px; padding:12px; border-left:3px solid var(--line)}
+
+/* ── 버튼 ───────────────────────────────────────────── */
+button.primary{
+  background:var(--sea); color:#fff; border:0; border-radius:12px;
+  padding:13px 18px; font-weight:700; cursor:pointer;
+}
+button.primary:active{background:var(--sea-d)}
+button.ghost{
+  background:var(--panel); color:var(--text); border:1px solid var(--line);
+  border-radius:12px; padding:12px 16px; cursor:pointer;
+}
+button.ghost:active{background:var(--bg)}
+button.wide{display:block; width:100%; margin-top:10px}
+.danger-txt{color:var(--bad)}
+.row{display:flex; gap:8px; margin-top:10px}
+.row > *{flex:1}
+.row input{min-width:0}
+
+/* ── 배너 ───────────────────────────────────────────── */
+.banner{display:flex; gap:12px; align-items:flex-start; border-radius:14px;
+  padding:14px 16px; margin-bottom:14px; border:1px solid transparent}
+.banner-icon{font-size:24px; line-height:1}
+.banner strong{display:block; font-size:15px; margin-bottom:2px}
+.banner p{margin:0; font-size:14px}
+.banner.danger{background:var(--bad-bg); border-color:var(--bad); color:var(--bad)}
+.banner.warn{background:var(--warn-bg); border-color:var(--warn); color:var(--warn)}
+.banner.ok{background:var(--ok-bg); border-color:var(--ok); color:var(--ok)}
+.banner.info{background:var(--panel); border-color:var(--line); color:var(--text)}
+.banner p{color:var(--text); opacity:.85}
+
+/* ── 낚시 지수 카드 ──────────────────────────────────── */
+.index-card{
+  background:linear-gradient(135deg,var(--sea),var(--sea-l));
+  color:#fff; border-radius:18px; padding:18px; box-shadow:var(--shadow);
+}
+.idx-head{display:flex; justify-content:space-between; font-size:13px; opacity:.85}
+.idx-score{display:flex; align-items:baseline; gap:4px; margin:2px 0 0}
+.idx-score span{font-size:52px; font-weight:800; letter-spacing:-.03em; line-height:1.1}
+.idx-score small{font-size:16px; opacity:.8}
+.idx-label{font-size:17px; font-weight:700; margin-top:-4px}
+.idx-comment{margin:8px 0 12px; font-size:14px; opacity:.92}
+.idx-facts{display:grid; grid-template-columns:repeat(auto-fit,minmax(64px,1fr)); gap:8px}
+.idx-facts div{background:rgba(255,255,255,.15); border-radius:10px; padding:8px 6px; text-align:center}
+.idx-facts b{display:block; font-size:15px}
+.idx-facts small{font-size:11px; opacity:.8}
+
+.seg{display:flex; gap:6px; margin:12px 0 4px}
+.seg button{
+  flex:1; min-width:0; background:var(--panel); border:1px solid var(--line);
+  border-radius:12px; padding:8px 2px; font-size:12px; cursor:pointer;
+  text-align:center; white-space:nowrap; line-height:1.35;
+}
+.seg button i{display:block; font-style:normal; font-size:10.5px; opacity:.6}
+.seg button b{display:block; font-size:17px; font-weight:800}
+@media (max-width:400px){
+  .seg{gap:4px}
+  .seg button{font-size:11px; padding:7px 1px}
+  .seg button b{font-size:15px}
+}
+.seg button.on{border-color:var(--sea); background:var(--sea); color:#fff}
+.seg button.risk b{color:var(--bad)}
+.seg button.on.risk b{color:#fff}
+
+/* ── 필터 알약 ──────────────────────────────────────── */
+.filter-row{display:flex; gap:6px; flex-wrap:wrap; margin:10px 0}
+.pill{background:var(--panel); border:1px solid var(--line); border-radius:999px;
+  padding:6px 14px; font-size:13px; cursor:pointer}
+.pill.on{background:var(--text); color:var(--bg); border-color:var(--text)}
+
+/* ── 지도 (Leaflet) ─────────────────────────────────── */
+#minimap{width:100%; height:300px; background:var(--panel);
+  border:1px solid var(--line); border-radius:14px; display:block; z-index:1}
+.map-tools{display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap}
+.map-tools .fine{flex:1; min-width:140px}
+/* 스팟 표시 핀 — 점수에 따라 색이 바뀐다 */
+.pin-dot{border-radius:50%; border:2.5px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.45)}
+.pin-me{border-radius:50%; background:#1d7fa8; border:3px solid #fff;
+  box-shadow:0 0 0 4px rgba(29,127,168,.3), 0 1px 4px rgba(0,0,0,.4)}
+.leaflet-container{background:var(--bg); font:inherit; border-radius:14px}
+.leaflet-popup-content{margin:11px 13px; font-size:13.5px; line-height:1.5}
+.leaflet-popup-content b{font-size:15px}
+.leaflet-popup-content .go{display:inline-block; margin-top:7px; color:var(--sea-l);
+  font-weight:700; cursor:pointer; text-decoration:underline}
+/* 어두운 화면에서는 '지도 그림만' 색을 뒤집어 어둡게 만든다.
+   .leaflet-tile-pane 에만 걸어서 스팟 핀·팝업은 원래 색을 지킨다.
+   hue-rotate(180deg)로 되돌려야 바다가 파랗게 남는다. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .leaflet-tile-pane{
+    filter: invert(1) hue-rotate(180deg) saturate(.55) brightness(.82) contrast(1.05);
+  }
+}
+:root[data-theme="dark"] .leaflet-tile-pane{
+  filter: invert(1) hue-rotate(180deg) saturate(.55) brightness(.82) contrast(1.05);
+}
+
+/* ── 스팟 카드 ──────────────────────────────────────── */
+.spot{background:var(--panel); border:1px solid var(--line); border-radius:14px;
+  padding:13px 15px; margin-bottom:10px; box-shadow:var(--shadow); cursor:pointer}
+.spot:active{transform:scale(.995)}
+.spot-top{display:flex; align-items:center; gap:8px}
+.spot-top strong{flex:1; font-size:16px}
+.spot-badge{font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px}
+.spot-badge.g{background:var(--ok-bg); color:var(--ok)}
+.spot-badge.y{background:var(--warn-bg); color:var(--warn)}
+.spot-badge.r{background:var(--bad-bg); color:var(--bad)}
+.spot-sub{font-size:13px; color:var(--muted); margin-top:2px}
+.spot-fish{display:flex; gap:5px; flex-wrap:wrap; margin-top:8px}
+.tagx{font-size:11px; background:var(--bg); border:1px solid var(--line);
+  border-radius:6px; padding:2px 7px; color:var(--muted)}
+.stars{color:var(--gold); letter-spacing:1px}
+
+/* ── 사진 넣는 방법 고르기 ──────────────────────────── */
+.pick-row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.pick-btn{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  background:var(--panel); border:2px dashed var(--line); border-radius:18px;
+  padding:22px 12px; cursor:pointer; text-align:center; color:var(--text);
+}
+.pick-btn:active{border-color:var(--sea); background:var(--bg)}
+.pick-btn .ms{font-size:34px; color:var(--sea)}
+.pick-btn strong{font-size:15px}
+.pick-btn small{font-size:12px; color:var(--muted)}
+@media (max-width:360px){ .pick-row{grid-template-columns:1fr} }
+
+/* ── 카메라 촬영 화면 ───────────────────────────────── */
+.cam-layer{position:fixed; inset:0; z-index:80; background:rgba(6,20,28,.92);
+  display:flex; align-items:center; justify-content:center; padding:16px}
+.cam-box{width:100%; max-width:560px}
+.cam-view{background:#000; border-radius:16px; overflow:hidden; min-height:200px;
+  display:flex; align-items:center; justify-content:center}
+#cam-video{width:100%; max-height:70vh; display:block; object-fit:contain}
+.cam-actions{display:flex; gap:10px; margin-top:12px; align-items:center}
+.cam-actions .primary{flex:1; display:flex; align-items:center; justify-content:center; gap:6px}
+.cam-actions .ghost{flex:0 0 auto}
+
+/* ── 스팟 상세 맨 아래 길찾기 ───────────────────────── */
+.dir-box{margin-top:20px; padding-top:14px; border-top:1px solid var(--line)}
+/* button.primary 는 button 에만 걸려 있어서 <a> 에는 안 먹는다 — 따로 정의 */
+.dir-btn{
+  display:block; width:100%; margin-top:9px; padding:14px 16px;
+  border-radius:12px; text-align:center; text-decoration:none;
+  font-weight:700; font-size:15px; cursor:pointer;
+}
+.dir-btn.go{background:var(--sea); color:#fff}
+.dir-btn.go:active{background:var(--sea-d)}
+.dir-btn.sub{background:var(--panel); color:var(--text); border:1px solid var(--line)}
+.dir-btn.sub:active{background:var(--bg)}
+
+/* ── 사진 업로드 ────────────────────────────────────── */
+.drop{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  background:var(--panel); border:2px dashed var(--line); border-radius:18px;
+  padding:34px 20px; text-align:center; cursor:pointer;
+}
+.drop:active{border-color:var(--sea)}
+.drop-icon{font-size:40px}
+.drop small{color:var(--muted); font-size:12.5px; line-height:1.5}
+.where-row{margin-top:14px}
+.where-row label{display:block; font-size:13px; color:var(--muted); margin-bottom:5px}
+.where-row select, .ref-row select, .ref-row input, .frow input, .frow select{
+  width:100%; padding:11px 12px; border-radius:11px;
+  border:1px solid var(--line); background:var(--panel);
+}
+
+.shot-row{display:flex; gap:12px; align-items:flex-start}
+#shot{width:130px; border-radius:12px; border:1px solid var(--line)}
+.shot-meta{font-size:12px; color:var(--muted); flex:1}
+.shot-meta code{background:var(--bg); padding:1px 5px; border-radius:5px; font-size:11px}
+
+/* ── 후보 카드 ──────────────────────────────────────── */
+.cand{display:flex; align-items:center; gap:12px; background:var(--panel);
+  border:1px solid var(--line); border-radius:14px; padding:12px 14px;
+  margin-bottom:8px; cursor:pointer; box-shadow:var(--shadow)}
+.cand:active{border-color:var(--sea)}
+.cand .em{font-size:26px}
+.cand .info{flex:1; min-width:0}
+.cand .info strong{font-size:16px}
+.cand .info small{display:block; color:var(--muted); font-size:12px}
+.conf{text-align:right; min-width:64px}
+.conf b{font-size:19px}
+.conf-bar{height:4px; background:var(--line); border-radius:3px; margin-top:3px; overflow:hidden}
+.conf-bar i{display:block; height:100%; background:var(--sea)}
+.cand.top{border-color:var(--sea); border-width:2px}
+
+/* ── 측정 캔버스 ────────────────────────────────────── */
+.canvas-wrap{position:relative; border-radius:14px; overflow:hidden;
+  border:1px solid var(--line); background:#000; margin-top:10px}
+#mcanvas{display:block; width:100%; touch-action:none; cursor:crosshair}
+.measure-status{font-size:13px; color:var(--muted); margin-top:8px; text-align:center}
+.measure-guide{font-size:13px; margin-bottom:10px}
+.ref-row{display:flex; gap:8px; align-items:center; margin-top:12px}
+.ref-row label{font-size:13px; color:var(--muted); white-space:nowrap}
+.result-len{background:var(--ok-bg); color:var(--ok); border-radius:14px;
+  padding:14px; text-align:center; margin-top:12px; font-weight:700}
+.result-len b{font-size:30px; display:block}
+
+/* ── 판정 결과 ──────────────────────────────────────── */
+.verdict{border-radius:14px; padding:13px 15px; margin-bottom:10px;
+  border:1px solid; display:flex; gap:11px; align-items:flex-start}
+.verdict .vi{font-size:22px; line-height:1.1}
+.verdict strong{display:block; font-size:15px}
+.verdict p{margin:3px 0 0; font-size:13.5px; opacity:.9}
+.verdict .src{font-size:11px; opacity:.7; margin-top:6px; display:block}
+.v-bad{background:var(--bad-bg); border-color:var(--bad); color:var(--bad)}
+.v-warn{background:var(--warn-bg); border-color:var(--warn); color:var(--warn)}
+.v-ok{background:var(--ok-bg); border-color:var(--ok); color:var(--ok)}
+.verdict p, .verdict .src{color:var(--text)}
+
+.save-form{background:var(--panel); border:1px solid var(--line);
+  border-radius:14px; padding:8px 14px; margin:12px 0}
+.frow{display:flex; align-items:center; gap:10px; padding:9px 0;
+  border-bottom:1px solid var(--line)}
+.frow:last-child{border-bottom:0}
+.frow label{width:82px; flex:0 0 82px; font-size:13px; color:var(--muted)}
+.frow span{flex:1; font-size:14.5px; font-weight:600}
+.frow select, .frow input{flex:1; width:auto}
+.check{display:flex; align-items:center; gap:8px; padding:11px 0; font-size:14px}
+.check input{width:20px; height:20px}
+
+/* ── 도감 ───────────────────────────────────────────── */
+.progress-card{background:var(--panel); border:1px solid var(--line);
+  border-radius:14px; padding:14px 16px; box-shadow:var(--shadow)}
+.pg-top{display:flex; justify-content:space-between; align-items:baseline}
+.pg-top strong{font-size:18px}
+.pg-top span{font-size:13px; color:var(--muted)}
+.pg-bar{height:9px; background:var(--line); border-radius:6px; margin-top:9px; overflow:hidden}
+.pg-bar div{height:100%; background:linear-gradient(90deg,var(--sea),var(--sea-l)); width:0; transition:width .4s}
+
+.challenge-card{background:var(--panel); border:1px solid var(--line);
+  border-radius:14px; padding:14px 16px; margin-top:12px; box-shadow:var(--shadow)}
+.ch-top{display:flex; align-items:center; gap:10px}
+.ch-top .ci{font-size:24px}
+.ch-top strong{flex:1}
+.ch-top em{font-style:normal; font-weight:800; color:var(--sea)}
+.ch-done{color:var(--ok); font-weight:800}
+
+#badge-row{display:grid; grid-template-columns:repeat(auto-fill,minmax(78px,1fr)); gap:8px}
+.badge{background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  padding:10px 4px; text-align:center; opacity:.35; cursor:pointer}
+.badge.got{opacity:1; border-color:var(--gold)}
+.badge .bi{font-size:24px; display:block}
+.badge small{font-size:11px; display:block; margin-top:2px; line-height:1.3}
+
+#dex-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:9px}
+.dex{background:var(--panel); border:1px solid var(--line); border-radius:13px;
+  padding:11px 6px; text-align:center; cursor:pointer; position:relative}
+.dex .de{font-size:28px; display:block; filter:grayscale(1) opacity(.25)}
+.dex.got .de{filter:none}
+.dex strong{font-size:12.5px; display:block; margin-top:3px}
+.dex small{font-size:11px; color:var(--muted)}
+.dex.got{border-color:var(--sea)}
+.dex .lock{font-size:11px; color:var(--muted)}
+.dex .pin{position:absolute; top:5px; right:6px; font-size:11px}
+
+.log{display:flex; gap:11px; align-items:center; background:var(--panel);
+  border:1px solid var(--line); border-radius:13px; padding:10px 12px;
+  margin-bottom:8px; box-shadow:var(--shadow)}
+.log img{width:56px; height:56px; object-fit:cover; border-radius:10px; flex:0 0 56px}
+.log .li{flex:1; min-width:0}
+.log .li strong{font-size:15px}
+.log .li small{display:block; color:var(--muted); font-size:12px}
+.log .lb{display:flex; flex-direction:column; gap:4px}
+.mini{font-size:11px; padding:5px 9px; border-radius:8px; border:1px solid var(--line);
+  background:var(--bg); cursor:pointer; white-space:nowrap}
+
+/* ── 친구 ───────────────────────────────────────────── */
+.invite-card{background:linear-gradient(135deg,var(--sea-d),var(--sea));
+  color:#fff; border-radius:18px; padding:18px; box-shadow:var(--shadow)}
+.inv-label{font-size:12px; opacity:.8}
+.inv-code{font-size:30px; font-weight:800; letter-spacing:.08em; font-variant-numeric:tabular-nums}
+.inv-help{font-size:12.5px; opacity:.85; margin:6px 0 0}
+.invite-card input{background:rgba(255,255,255,.16); border:0; color:#fff;
+  border-radius:11px; padding:11px 12px}
+.invite-card input::placeholder{color:rgba(255,255,255,.6)}
+.invite-card button.primary{background:#fff; color:var(--sea-d); flex:0 0 78px}
+
+.rank{display:flex; align-items:center; gap:12px; background:var(--panel);
+  border:1px solid var(--line); border-radius:13px; padding:12px 14px;
+  margin-bottom:8px; box-shadow:var(--shadow)}
+.rank .no{font-size:19px; font-weight:800; width:30px; text-align:center; color:var(--muted)}
+.rank.me{border-color:var(--sea); border-width:2px}
+.rank .rn{flex:1}
+.rank .rn strong{font-size:15px}
+.rank .rn small{display:block; color:var(--muted); font-size:12px}
+.rank .rv{font-weight:800; font-size:17px}
+.rank.gold .no{color:var(--gold)}
+
+.feed{background:var(--panel); border:1px solid var(--line); border-radius:14px;
+  padding:12px 14px; margin-bottom:10px; box-shadow:var(--shadow)}
+.feed-top{display:flex; align-items:center; gap:9px; font-size:13px; color:var(--muted)}
+.feed-top b{color:var(--text); font-size:14px}
+.feed-body{display:flex; gap:11px; margin-top:9px; align-items:center}
+.feed-body img{width:70px; height:70px; object-fit:cover; border-radius:11px}
+.like{background:none; border:0; cursor:pointer; font-size:14px; padding:6px 0 0; color:var(--muted)}
+.like.on{color:var(--bad)}
+
+/* ── 하단 탭 ────────────────────────────────────────── */
+#tabbar{
+  position:fixed; left:0; right:0; bottom:0; z-index:40;
+  display:flex; background:var(--panel); border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.tab{flex:1; background:none; border:0; padding:7px 0 9px; font-size:11px;
+  color:var(--muted); cursor:pointer; display:flex; flex-direction:column;
+  align-items:center; gap:2px; height:var(--tabh)}
+.tab span{font-size:21px; line-height:1.15}
+.tab.on{color:var(--sea); font-weight:700}
+
+/* ── 모달 / 토스트 ──────────────────────────────────── */
+.modal{position:fixed; inset:0; z-index:60; background:rgba(6,20,28,.55);
+  display:flex; align-items:flex-end; justify-content:center; padding:0}
+.modal-box{background:var(--panel); width:100%; max-width:560px; max-height:88vh;
+  overflow:auto; border-radius:20px 20px 0 0; padding:20px 18px 30px; position:relative;
+  animation:up .2s ease}
+@keyframes up{from{transform:translateY(20px);opacity:.6}to{transform:none;opacity:1}}
+.modal-x{position:absolute; top:12px; right:12px; background:var(--bg);
+  border:1px solid var(--line); border-radius:50%; width:32px; height:32px; cursor:pointer}
+.modal h3{margin:0 0 4px; font-size:20px}
+.modal .msub{color:var(--muted); font-size:13px; margin:0 0 14px}
+.modal .kv{display:flex; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:14px}
+.modal .kv b{width:78px; flex:0 0 78px; color:var(--muted); font-weight:500; font-size:13px}
+.search-in{width:100%; padding:12px; border-radius:12px; border:1px solid var(--line);
+  background:var(--bg); margin-bottom:10px}
+.pick{display:flex; align-items:center; gap:10px; padding:10px 8px; border-radius:10px; cursor:pointer}
+.pick:active{background:var(--bg)}
+.pick .em{font-size:22px}
+.pick small{color:var(--muted); font-size:12px}
+
+.toast{position:fixed; left:50%; bottom:calc(var(--tabh) + 20px); transform:translateX(-50%);
+  background:var(--text); color:var(--bg); padding:11px 18px; border-radius:999px;
+  font-size:14px; z-index:70; box-shadow:var(--shadow); max-width:88vw; text-align:center}
+
+/* 공유 카드 미리보기 */
+#share-canvas{width:100%; border-radius:14px; border:1px solid var(--line)}
+
+</style>
+<script>
+/* 저장해 둔 화면 밝기를 먼저 입힌다 — 늦게 하면 밝은 화면이 한 번 번쩍인다 */
+(function(){
+  try{ var t = localStorage.getItem('nm.theme');
+       if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); }catch(e){}
+})();
+</script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     상단 바
+     ══════════════════════════════════════════════════════════ -->
+<header id="topbar">
+  <div class="brand">
+    <img class="brand-icon" alt="낚시 민족 로고" src="data:image/png;base64,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">
+    <div>
+      <strong>낚시 민족</strong>
+      <small id="top-sub">오늘의 물때를 확인하는 중…</small>
+    </div>
+  </div>
+  <!-- 실시간 현재 날씨 · 누르면 위치와 날씨를 다시 잡는다 -->
+  <button class="wx-btn" id="btn-loc" title="지금 날씨 — 눌러서 위치·날씨 새로고침">
+    <span class="wx-ico" id="wx-ico">🛰️</span>
+    <span class="wx-t">
+      <b id="wx-temp">–°</b>
+      <small><i class="wx-live" id="wx-live"></i><span id="wx-sub">불러오는 중</span></small>
+    </span>
+  </button>
+  <!-- 밝게 / 어둡게 전환 -->
+  <button class="icon-btn" id="btn-theme" title="화면 밝기 바꾸기"><span class="ms" id="theme-ico">dark_mode</span></button>
+</header>
+
+<main id="app">
+
+<!-- ══════════════════════════════════════════════════════════
+     1. 오늘  —  F-1 낚시 지수 / S-1 악천후 경고 / F-2 스팟 / F-3 후기
+     ══════════════════════════════════════════════════════════ -->
+<section class="screen on" id="s-today">
+<div class="cols">
+<div class="col-a">
+
+  <div id="storm-banner" class="banner danger hide">
+    <div class="banner-icon ms">storm</div>
+    <div>
+      <strong id="storm-title">기상 경고</strong>
+      <p id="storm-body"></p>
+    </div>
+  </div>
+
+  <div class="index-card" id="index-card">
+    <div class="idx-head">
+      <span id="idx-when">오늘 오전</span>
+      <span id="idx-place">위치 확인 중…</span>
+    </div>
+    <div class="idx-score"><span id="idx-num">–</span><small>점</small></div>
+    <div class="idx-label" id="idx-label">날씨를 불러오는 중</div>
+    <p class="idx-comment" id="idx-comment"></p>
+    <div class="idx-facts" id="idx-facts"></div>
+  </div>
+
+  <div class="seg" id="slot-seg"></div>
+
+</div><!-- /col-a -->
+<div class="col-b">
+
+  <h2 class="sec-title">주변 꿀스팟 <small id="spot-count"></small></h2>
+  <div id="minimap" aria-label="주변 스팟 지도"></div>
+  <div class="map-tools">
+    <button class="mini" id="map-me"><span class="ms">my_location</span> 내 위치로</button>
+    <button class="mini" id="map-all"><span class="ms">zoom_out_map</span> 전체 보기</button>
+    <span class="fine" id="map-hint">지도 위에서 휠을 굴리면 확대·축소, 끌면 이동합니다</span>
+  </div>
+  <div class="filter-row">
+    <button class="pill on" data-water="all">전체</button>
+    <button class="pill" data-water="민물">민물</button>
+    <button class="pill" data-water="바다">바다</button>
+  </div>
+  <div id="spot-list"></div>
+
+</div><!-- /col-b -->
+</div><!-- /cols -->
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     2. 기록  —  F-4 판별 / S-2 수동선택 / F-5 측정 / S-3 안내
+                 F-6 저장 / F-7 보호종 / F-8 금어기 / F-9 기생충
+     ══════════════════════════════════════════════════════════ -->
+<section class="screen" id="s-catch">
+
+  <!-- 단계 1 : 사진 -->
+  <div class="step" id="step-photo">
+    <h2 class="sec-title">1. 잡은 물고기 사진</h2>
+    <input type="file" id="file" accept="image/*" hidden>
+    <div class="pick-row">
+      <button class="pick-btn" id="btn-cam" type="button">
+        <span class="ms">photo_camera</span>
+        <strong>카메라로 찍기</strong>
+        <small>지금 바로 촬영</small>
+      </button>
+      <button class="pick-btn" id="btn-file" type="button">
+        <span class="ms">image</span>
+        <strong>파일에서 고르기</strong>
+        <small>앨범·컴퓨터 사진</small>
+      </button>
+    </div>
+    <p class="note" style="margin-top:10px">
+      자·신용카드처럼 <b>크기를 아는 물건</b>을 물고기 옆에 놓고 찍으면 길이까지 재 드립니다.
+    </p>
+    <div class="where-row">
+      <label>어디서 잡았나요?</label>
+      <select id="catch-spot"><option value="">— 선택 안 함 —</option></select>
+    </div>
+  </div>
+
+  <!-- 단계 2 : 어종 판별 -->
+  <div class="step hide" id="step-id">
+    <h2 class="sec-title">2. 어종 판별</h2>
+    <div class="shot-row">
+      <img id="shot" alt="업로드한 사진">
+      <div class="shot-meta" id="shot-meta"></div>
+    </div>
+    <div id="id-note" class="note"></div>
+    <div id="cand-list"></div>
+    <button class="ghost wide" id="btn-manual">목록에서 직접 찾기</button>
+  </div>
+
+  <!-- 단계 3 : 크기 측정 -->
+  <div class="step hide" id="step-size">
+    <h2 class="sec-title">3. 크기 재기</h2>
+    <div class="measure-guide" id="measure-guide"></div>
+    <div class="ref-row">
+      <label>기준물</label>
+      <select id="ref-sel"></select>
+      <input type="number" id="ref-cm" class="hide" placeholder="cm" step="0.1">
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="mcanvas"></canvas>
+    </div>
+    <div class="measure-status" id="measure-status">기준물의 양 끝을 두 번 탭하세요.</div>
+    <div class="row">
+      <button class="ghost" id="btn-mreset">다시 찍기</button>
+      <button class="ghost" id="btn-manual-len">길이 직접 입력</button>
+    </div>
+    <div class="result-len hide" id="result-len"></div>
+    <button class="primary wide hide" id="btn-to-save">다음 — 정보 확인</button>
+  </div>
+
+  <!-- 단계 4 : 법규 판정 + 저장 -->
+  <div class="step hide" id="step-save">
+    <h2 class="sec-title">4. 확인하고 기록하기</h2>
+    <div id="verdicts"></div>
+    <div class="save-form">
+      <div class="frow"><label>어종</label><span id="sv-fish"></span></div>
+      <div class="frow"><label>크기</label><span id="sv-len"></span></div>
+      <div class="frow"><label>일시</label><span id="sv-at"></span></div>
+      <div class="frow"><label>장소</label><span id="sv-place"></span></div>
+      <div class="frow"><label>날씨</label><span id="sv-weather"></span></div>
+      <div class="frow">
+        <label>낚시법</label>
+        <select id="sv-method">
+          <option>루어</option><option>원투</option><option>찌</option>
+          <option>선상</option><option>기타</option>
+        </select>
+      </div>
+      <div class="frow">
+        <label>위치 공개</label>
+        <select id="sv-privacy">
+          <option value="spot">스팟 이름까지만</option>
+          <option value="friends">친구에게 좌표까지</option>
+          <option value="private">비공개</option>
+        </select>
+      </div>
+      <label class="check"><input type="checkbox" id="sv-released"> 방생했습니다</label>
+    </div>
+    <button class="primary wide" id="btn-save">도감에 기록하기</button>
+    <button class="ghost wide" id="btn-cancel">처음부터</button>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     3. 도감  —  F-10 나의 도감 / F-11 어종 상세 / F-12 배지·챌린지
+     ══════════════════════════════════════════════════════════ -->
+<section class="screen" id="s-dex">
+  <div class="pair">
+  <div class="progress-card">
+    <div class="pg-top"><strong id="dex-count">0종 수집</strong><span id="dex-total"></span></div>
+    <div class="pg-bar"><div id="dex-fill"></div></div>
+  </div>
+
+  <div class="challenge-card" id="challenge-card"></div>
+  </div><!-- /pair -->
+
+  <h2 class="sec-title">배지</h2>
+  <div id="badge-row"></div>
+
+  <h2 class="sec-title">어종 도감</h2>
+  <div class="filter-row">
+    <button class="pill on" data-dex="all">전체</button>
+    <button class="pill" data-dex="민물">민물</button>
+    <button class="pill" data-dex="바다">바다</button>
+    <button class="pill" data-dex="got">잡은 것만</button>
+  </div>
+  <div id="dex-grid"></div>
+
+  <h2 class="sec-title">내 기록</h2>
+  <div id="log-list"></div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     4. 친구  —  F-13 친구 추가 / F-14 공유 카드 / F-15 랭킹 / S-5 검증
+     ══════════════════════════════════════════════════════════ -->
+<section class="screen" id="s-friends">
+<div class="cols">
+<div class="col-a">
+  <div class="invite-card">
+    <div class="inv-label">내 초대 코드</div>
+    <div class="inv-code" id="my-code">—</div>
+    <p class="inv-help">상대가 이 코드를 입력하고, 내가 수락하면 연결됩니다.</p>
+    <div class="row">
+      <input id="code-input" placeholder="친구 코드 입력 (예: AB12-CD34)" maxlength="9">
+      <button class="primary" id="btn-add-friend">추가</button>
+    </div>
+    <div id="friend-msg" class="note hide"></div>
+  </div>
+
+  <div id="pending-box"></div>
+
+  <h2 class="sec-title">이번 달 랭킹</h2>
+  <div class="filter-row">
+    <button class="pill on" data-rank="len">최대어 길이</button>
+    <button class="pill" data-rank="species">수집 종 수</button>
+  </div>
+  <div id="rank-list"></div>
+  <p class="fine" id="rank-note"></p>
+</div><!-- /col-a -->
+<div class="col-b">
+
+  <h2 class="sec-title">친구 피드</h2>
+  <div id="feed-list"></div>
+
+</div><!-- /col-b -->
+</div><!-- /cols -->
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     5. 설정  —  S-4 규정 데이터 갱신(운영자) 포함
+     ══════════════════════════════════════════════════════════ -->
+<section class="screen" id="s-settings">
+  <h2 class="sec-title">내 정보</h2>
+  <div class="card">
+    <div class="frow"><label>닉네임</label><input id="set-nick" maxlength="12"></div>
+    <div class="frow"><label>기본 공개범위</label>
+      <select id="set-privacy">
+        <option value="spot">스팟 이름까지만</option>
+        <option value="friends">친구에게 좌표까지</option>
+        <option value="private">비공개</option>
+      </select>
+    </div>
+  </div>
+
+  <h2 class="sec-title">법규 데이터</h2>
+  <div class="card">
+    <p class="fine" id="reg-meta"></p>
+    <button class="ghost wide" id="btn-admin">운영자 화면 열기</button>
+  </div>
+
+  <div class="card hide" id="admin-panel">
+    <h3>어종별 규정 편집 <small>(운영자)</small></h3>
+    <p class="fine">여기서 고친 값은 이 기기에만 저장되며, 판정에 즉시 반영됩니다.</p>
+    <select id="admin-fish"></select>
+    <div class="frow"><label>금어기 시작</label><input id="admin-from" placeholder="MM-DD"></div>
+    <div class="frow"><label>금어기 종료</label><input id="admin-to" placeholder="MM-DD"></div>
+    <div class="frow"><label>금지체장(cm)</label><input id="admin-min" type="number" step="0.1"></div>
+    <div class="frow"><label>보호 등급</label>
+      <select id="admin-grade">
+        <option value="">없음</option>
+        <option value="protected">보호·멸종위기</option>
+        <option value="invasive">생태계교란</option>
+      </select>
+    </div>
+    <div class="frow"><label>시행 기준일</label><input id="admin-date" placeholder="YYYY-MM-DD"></div>
+    <button class="primary wide" id="btn-admin-save">이 어종 규정 저장</button>
+    <button class="ghost wide" id="btn-admin-reset">모든 수정 되돌리기</button>
+  </div>
+
+  <h2 class="sec-title">데이터</h2>
+  <div class="card">
+    <button class="ghost wide" id="btn-demo">데모 기록 채워 넣기</button>
+    <button class="ghost wide danger-txt" id="btn-wipe">모든 기록 지우기</button>
+  </div>
+
+  <p class="fine disclaimer">
+    이 앱의 어종·법규 정보는 참고용입니다. 실제 포획 가능 여부는 해양수산부와
+    관할 지자체 고시를 확인하세요. 기생충 안내는 질병관리청 공개 자료를 옮긴
+    것으로 의학적 진단이 아닙니다.
+  </p>
+</section>
+
+</main>
+
+<!-- ══════════════════════════════════════════════════════════
+     하단 탭
+     ══════════════════════════════════════════════════════════ -->
+<nav id="tabbar">
+  <button class="tab on" data-go="s-today"><span class="ms">partly_cloudy_day</span>오늘</button>
+  <button class="tab" data-go="s-catch"><span class="ms">photo_camera</span>기록</button>
+  <button class="tab" data-go="s-dex"><span class="ms">menu_book</span>도감</button>
+  <button class="tab" data-go="s-friends"><span class="ms">emoji_events</span>친구</button>
+  <button class="tab" data-go="s-settings"><span class="ms">settings</span>설정</button>
+</nav>
+
+<!-- 공용 모달 -->
+<div id="modal" class="modal hide">
+  <div class="modal-box">
+    <button class="modal-x" id="modal-x"><span class="ms">close</span></button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- 카메라 촬영 화면 -->
+<div id="cam-layer" class="cam-layer hide">
+  <div class="cam-box">
+    <div class="cam-view">
+      <video id="cam-video" playsinline autoplay muted></video>
+      <div id="cam-err" class="banner danger hide" style="margin:0"></div>
+    </div>
+    <div class="cam-actions">
+      <button class="ghost" id="cam-cancel" type="button">취소</button>
+      <button class="primary" id="cam-shot" type="button"><span class="ms">camera</span> 찍기</button>
+      <button class="ghost" id="cam-switch" type="button" title="앞뒤 카메라 전환"><span class="ms">cameraswitch</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hide"></div>
+
+<script>
+/* ===== data.js ===== */
+/* ============================================================
+   낚시 도감 — 기초 데이터
+   ------------------------------------------------------------
+   · FISH   : 어종 도감 + 법규(금어기·금지체장) + 기생충 정보
+   · SPOTS  : 낚시 포인트
+   · BADGES : 수집 배지
+   · CHALLENGES : 주간 챌린지 풀
+
+   ⚠️ 법규 데이터 주의
+   아래 금어기·금지체장은 수산자원관리법 시행령 별표를 참고한
+   "데모용 스냅샷"이다. 실제 규정은 ①시·도 조례로 달라지고
+   ②매년 개정되므로, 출조 전 반드시 해양수산부·관할 지자체
+   고시를 확인해야 한다. 앱은 이 데이터의 기준일(REG_META)을
+   항상 화면에 함께 표시한다. 운영자 화면(설정 탭)에서 수정 가능.
+   ============================================================ */
+
+const REG_META = {
+  source: '해양수산부 수산자원관리법 시행령 별표 · 각 시도 내수면어업 조례',
+  baseDate: '2026-01-01',
+  notice: '시·도별로 다를 수 있습니다. 출조 전 관할 지자체 고시를 확인하세요.'
+};
+
+/* ── 어종 도감 ────────────────────────────────────────────
+   vision : 사진 판별용 색·형태 힌트 (데모 판별기가 참조)
+     hue   [0~360] 평균 색상, sat [0~1] 채도, val [0~1] 밝기
+     ratio 몸길이/몸높이 비율 (납작하면 작고, 길쭉하면 크다)
+   ban    : 금어기 {from:'MM-DD', to:'MM-DD'}  (연말 넘김 허용)
+   minLen : 금지체장 cm (이보다 작으면 방류)
+   grade  : 'protected' 보호·멸종위기 | 'invasive' 생태교란 | null
+   para   : 기생충 위험 'high' | 'mid' | null
+   ───────────────────────────────────────────────────────── */
+const FISH = [
+  /* ══ 민물 ══════════════════════════════════════════════ */
+  { id:'crucian', name:'붕어', water:'민물', emoji:'🐟',
+    vision:{hue:[35,60], sat:[.15,.5], val:[.35,.7], ratio:[2.1,2.9]},
+    habitat:'저수지·수로처럼 물살이 느린 정체수역의 수초 언저리',
+    season:'4~6월, 9~11월', avg:20, big:35, life:'최대 45cm',
+    bait:['떡밥','지렁이','옥수수'],
+    ban:null, minLen:15, grade:null, para:'high', edible:true,
+    note:'가장 흔한 민물 대상어. 산란기인 늦봄에 연안으로 붙는다.' },
+
+  { id:'carp', name:'잉어', water:'민물', emoji:'🐟',
+    vision:{hue:[25,50], sat:[.2,.6], val:[.25,.6], ratio:[2.6,3.4]},
+    habitat:'큰 강 본류와 댐호의 깊은 바닥', season:'5~10월',
+    avg:45, big:70, life:'최대 1m 이상',
+    bait:['옥수수','보리떡밥','글루텐'],
+    ban:null, minLen:null, grade:null, para:'high', edible:true,
+    note:'힘이 좋아 대물 손맛의 대명사. 수염 두 쌍으로 붕어와 구별한다.' },
+
+  { id:'mandarin', name:'쏘가리', water:'민물', emoji:'🐆',
+    vision:{hue:[30,55], sat:[.25,.6], val:[.2,.5], ratio:[2.8,3.6]},
+    habitat:'맑고 자갈이 깔린 강 여울과 큰 돌 틈', season:'6~9월',
+    avg:25, big:40, life:'최대 60cm',
+    bait:['루어(미노우)','참갈겨니 생미끼'],
+    ban:{from:'05-01', to:'06-10'}, minLen:18, grade:null, para:'mid', edible:true,
+    note:'표범 무늬가 특징. 금어기가 지역별로 다르니 반드시 확인.' },
+
+  { id:'catfish', name:'메기', water:'민물', emoji:'🐡',
+    vision:{hue:[20,45], sat:[.1,.4], val:[.1,.35], ratio:[3.5,5.0]},
+    habitat:'흙탕물 바닥, 수몰나무 아래', season:'5~9월(야간)',
+    avg:40, big:70, life:'최대 1m',
+    bait:['지렁이','새우','민물새우'],
+    ban:null, minLen:15, grade:null, para:'mid', edible:true,
+    note:'야행성. 비 온 뒤 흐린 물에서 활성이 오른다.' },
+
+  { id:'snakehead', name:'가물치', water:'민물', emoji:'🐍',
+    vision:{hue:[60,110], sat:[.15,.5], val:[.15,.4], ratio:[4.0,6.0]},
+    habitat:'수초가 빽빽한 늪·수로', season:'6~9월',
+    avg:45, big:70, life:'최대 80cm',
+    bait:['프로그 루어','개구리'],
+    ban:null, minLen:null, grade:null, para:'high', edible:true,
+    note:'토종 육식어. 수면 폭발 입질이 강렬하다. 생식은 절대 금물.' },
+
+  { id:'eel', name:'뱀장어', water:'민물', emoji:'🐍',
+    vision:{hue:[40,80], sat:[.1,.4], val:[.1,.3], ratio:[7.0,12.0]},
+    habitat:'하구·강 하류의 돌 틈과 뻘바닥', season:'6~9월(야간)',
+    avg:45, big:70, life:'최대 1m',
+    bait:['지렁이','새우'],
+    ban:null, minLen:20, grade:null, para:'mid', edible:true,
+    note:'실뱀장어(치어)는 별도 포획 규제 대상. 성어도 20cm 미만은 방류.' },
+
+  { id:'sweetfish', name:'은어', water:'민물', emoji:'🐟',
+    vision:{hue:[70,140], sat:[.1,.35], val:[.4,.75], ratio:[4.0,5.5]},
+    habitat:'맑은 하천 중상류의 여울', season:'7~9월',
+    avg:20, big:28, life:'최대 30cm',
+    bait:['놀림낚시','플라이'],
+    ban:{from:'04-01', to:'05-15'}, minLen:null, grade:null, para:'high', edible:true,
+    note:'수박 향이 난다고 알려진 어종. 요코가와흡충 위험이 있어 생식 금지.' },
+
+  { id:'minnow', name:'피라미', water:'민물', emoji:'🐠',
+    vision:{hue:[150,220], sat:[.1,.4], val:[.45,.8], ratio:[4.0,5.5]},
+    habitat:'하천 여울 어디에나', season:'연중',
+    avg:10, big:16, life:'최대 20cm',
+    bait:['작은 지렁이','플라이'],
+    ban:null, minLen:null, grade:null, para:'high', edible:true,
+    note:'초보자가 가장 먼저 만나는 물고기. 간흡충 위험이 특히 높다.' },
+
+  { id:'bass', name:'큰입배스', water:'민물', emoji:'🎯',
+    vision:{hue:[70,130], sat:[.2,.55], val:[.2,.5], ratio:[2.8,3.6]},
+    habitat:'저수지의 수몰 구조물·연안 커버', season:'4~11월',
+    avg:30, big:50, life:'최대 60cm',
+    bait:['웜','크랭크베이트','스피너베이트'],
+    ban:null, minLen:null, grade:'invasive', para:null, edible:true,
+    note:'생태계교란 생물. 살아있는 상태로 다른 수역에 옮기거나 방류하면 위법이다.' },
+
+  { id:'bluegill', name:'블루길', water:'민물', emoji:'🎯',
+    vision:{hue:[90,160], sat:[.2,.5], val:[.2,.5], ratio:[1.6,2.2]},
+    habitat:'저수지 연안 얕은 곳', season:'4~10월',
+    avg:12, big:22, life:'최대 25cm',
+    bait:['작은 웜','지렁이'],
+    ban:null, minLen:null, grade:'invasive', para:null, edible:true,
+    note:'생태계교란 생물. 배스와 마찬가지로 살아있는 채로 방류 금지.' },
+
+  /* ── 보호·멸종위기 (민물) ── */
+  { id:'gamdol', name:'감돌고기', water:'민물', emoji:'🛡️',
+    vision:{hue:[30,60], sat:[.1,.35], val:[.25,.55], ratio:[3.2,4.2]},
+    habitat:'금강 수계 맑은 여울', season:'—',
+    avg:8, big:10, life:'최대 12cm',
+    bait:['—'],
+    ban:null, minLen:null, grade:'protected', para:null, edible:false,
+    note:'멸종위기 야생생물 I급. 포획·채취 금지. 즉시 방생해야 한다.' },
+
+  { id:'miho', name:'미호종개', water:'민물', emoji:'🛡️',
+    vision:{hue:[35,60], sat:[.1,.3], val:[.4,.7], ratio:[6.0,9.0]},
+    habitat:'금강 미호천 등 모래 바닥', season:'—',
+    avg:7, big:10, life:'최대 10cm',
+    bait:['—'],
+    ban:null, minLen:null, grade:'protected', para:null, edible:false,
+    note:'멸종위기 I급이자 천연기념물. 포획 시 강한 처벌 대상.' },
+
+  { id:'huinsu', name:'흰수마자', water:'민물', emoji:'🛡️',
+    vision:{hue:[30,55], sat:[.05,.25], val:[.45,.8], ratio:[4.5,6.5]},
+    habitat:'낙동강·금강 수계 모래여울', season:'—',
+    avg:7, big:10, life:'최대 10cm',
+    bait:['—'],
+    ban:null, minLen:null, grade:'protected', para:null, edible:false,
+    note:'멸종위기 I급. 하얀 수염이 특징. 즉시 방생.' },
+
+  { id:'eoreumchi', name:'어름치', water:'민물', emoji:'🛡️',
+    vision:{hue:[40,70], sat:[.1,.3], val:[.35,.65], ratio:[3.4,4.4]},
+    habitat:'한강·금강 상류 맑은 물', season:'—',
+    avg:20, big:30, life:'최대 40cm',
+    bait:['—'],
+    ban:null, minLen:null, grade:'protected', para:null, edible:false,
+    note:'천연기념물 제259호. 산란탑을 쌓는 습성으로 유명하다. 포획 금지.' },
+
+  { id:'tungsari', name:'퉁사리', water:'민물', emoji:'🛡️',
+    vision:{hue:[20,45], sat:[.2,.5], val:[.2,.45], ratio:[3.0,4.0]},
+    habitat:'금강·만경강 자갈 바닥', season:'—',
+    avg:8, big:12, life:'최대 13cm',
+    bait:['—'],
+    ban:null, minLen:null, grade:'protected', para:null, edible:false,
+    note:'멸종위기 I급. 지느러미 가시에 독이 있어 맨손 취급 주의.' },
+
+  /* ══ 바다 ══════════════════════════════════════════════ */
+  { id:'blackporgy', name:'감성돔', water:'바다', emoji:'🐟',
+    vision:{hue:[190,240], sat:[.05,.25], val:[.3,.6], ratio:[1.9,2.5]},
+    habitat:'갯바위·방파제 주변 암초대', season:'10~2월',
+    avg:30, big:45, life:'최대 60cm',
+    bait:['크릴','참갯지렁이','민물새우'],
+    ban:{from:'05-01', to:'05-31'}, minLen:25, grade:null, para:null, edible:true,
+    note:'바다낚시 최고 인기 어종. 산란기 5월은 전국 금어기.' },
+
+  { id:'redseabream', name:'참돔', water:'바다', emoji:'🐠',
+    vision:{hue:[340,20], sat:[.25,.6], val:[.4,.75], ratio:[2.0,2.6]},
+    habitat:'외해 암초대·조류 소통 좋은 수심대', season:'4~6월, 10~12월',
+    avg:35, big:60, life:'최대 1m',
+    bait:['타이라바','크릴','새우'],
+    ban:null, minLen:24, grade:null, para:null, edible:true,
+    note:'몸에 파란 점이 흩뿌려져 있다. 24cm 미만은 방류 대상.' },
+
+  { id:'flounder', name:'넙치(광어)', water:'바다', emoji:'🫓',
+    vision:{hue:[25,55], sat:[.1,.35], val:[.2,.5], ratio:[1.3,1.9]},
+    habitat:'모래·펄 바닥', season:'9~2월',
+    avg:40, big:60, life:'최대 80cm',
+    bait:['다운샷 웜','미꾸라지','생미끼'],
+    ban:null, minLen:35, grade:null, para:null, edible:true,
+    note:'눈이 왼쪽에 몰려 있다. 금지체장 35cm로 큰 편이니 꼭 계측할 것.' },
+
+  { id:'rockfish', name:'조피볼락(우럭)', water:'바다', emoji:'🐟',
+    vision:{hue:[20,50], sat:[.1,.4], val:[.15,.4], ratio:[2.4,3.1]},
+    habitat:'인공어초·암초 지대', season:'연중(겨울 성수기)',
+    avg:28, big:45, life:'최대 60cm',
+    bait:['미꾸라지','지그헤드 웜'],
+    ban:null, minLen:23, grade:null, para:null, edible:true,
+    note:'선상 낚시 대표 어종. 23cm 미만은 방류.' },
+
+  { id:'seabass', name:'농어', water:'바다', emoji:'🐟',
+    vision:{hue:[190,230], sat:[.05,.25], val:[.4,.75], ratio:[3.2,4.2]},
+    habitat:'하구·방파제 조류대', season:'5~10월',
+    avg:45, big:75, life:'최대 1m',
+    bait:['미노우 루어','살아있는 새우'],
+    ban:null, minLen:30, grade:null, para:null, edible:true,
+    note:'루어 낚시의 꽃. 힘과 점프가 강렬하다.' },
+
+  { id:'darkbanded', name:'볼락', water:'바다', emoji:'🐠',
+    vision:{hue:[350,30], sat:[.2,.55], val:[.2,.5], ratio:[2.3,3.0]},
+    habitat:'연안 해조밭·방파제 틈', season:'11~4월(야간)',
+    avg:18, big:28, life:'최대 30cm',
+    bait:['작은 지그헤드','크릴'],
+    ban:null, minLen:15, grade:null, para:null, edible:true,
+    note:'겨울밤 라이트 게임의 주인공. 눈이 크다.' },
+
+  { id:'mackerel', name:'고등어', water:'바다', emoji:'🐟',
+    vision:{hue:[180,220], sat:[.15,.45], val:[.3,.65], ratio:[3.5,4.5]},
+    habitat:'방파제·선상 표층', season:'8~11월',
+    avg:25, big:38, life:'최대 45cm',
+    bait:['카고 채비','메탈 지그'],
+    ban:null, minLen:21, grade:null, para:null, edible:true,
+    note:'등의 물결무늬가 특징. 아니사키스 때문에 생식은 신선도 확인 필수.' },
+
+  { id:'horsemackerel', name:'전갱이', water:'바다', emoji:'🐟',
+    vision:{hue:[170,210], sat:[.1,.4], val:[.35,.7], ratio:[3.2,4.2]},
+    habitat:'방파제 상층·야간 집어등 주변', season:'7~11월',
+    avg:20, big:35, life:'최대 40cm',
+    bait:['카고','작은 메탈'],
+    ban:null, minLen:15, grade:null, para:null, edible:true,
+    note:'옆줄의 단단한 방패비늘(모비늘)로 구별한다.' },
+
+  { id:'hairtail', name:'갈치', water:'바다', emoji:'🗡️',
+    vision:{hue:[0,360], sat:[0,.12], val:[.6,.95], ratio:[8.0,14.0]},
+    habitat:'야간 선상·먼 방파제', season:'8~11월',
+    avg:60, big:110, life:'최대 1.5m',
+    bait:['꽁치 살','메탈 지그'],
+    ban:null, minLen:null, minAnal:18, grade:null, para:null, edible:true,
+    note:'금지 기준이 전장이 아니라 항문장 18cm이다. 이빨이 매우 날카로우니 주의.' },
+
+  { id:'codfish', name:'대구', water:'바다', emoji:'🐟',
+    vision:{hue:[30,60], sat:[.1,.35], val:[.3,.6], ratio:[3.0,4.0]},
+    habitat:'남해 깊은 수심 선상', season:'12~2월',
+    avg:50, big:80, life:'최대 1m',
+    bait:['대형 메탈 지그'],
+    ban:{from:'01-16', to:'02-15'}, minLen:35, grade:null, para:null, edible:true,
+    note:'겨울 한정 대상어. 산란기 금어기가 짧고 뚜렷하다.' },
+
+  { id:'righteye', name:'문치가자미(도다리)', water:'바다', emoji:'🫓',
+    vision:{hue:[25,50], sat:[.1,.35], val:[.2,.5], ratio:[1.4,2.0]},
+    habitat:'모래·펄 바닥', season:'3~5월',
+    avg:22, big:32, life:'최대 35cm',
+    bait:['청갯지렁이'],
+    ban:{from:'12-01', to:'01-31'}, minLen:20, grade:null, para:null, edible:true,
+    note:'광어와 반대로 눈이 오른쪽에 있다. 겨울 두 달이 금어기.' },
+
+  { id:'squid', name:'살오징어', water:'바다', emoji:'🦑',
+    vision:{hue:[340,25], sat:[.15,.5], val:[.35,.7], ratio:[2.5,3.5]},
+    habitat:'야간 선상 집어등', season:'6~12월',
+    avg:20, big:30, life:'외투장 30cm',
+    bait:['오징어 에기','슬로우 지그'],
+    ban:{from:'04-01', to:'05-31'}, minLen:15, lenType:'외투장', grade:null, para:null, edible:true,
+    note:'금지 기준은 외투장(몸통 길이) 15cm. 다리 포함 길이가 아니다.' },
+
+  { id:'octopus_s', name:'주꾸미', water:'바다', emoji:'🐙',
+    vision:{hue:[15,45], sat:[.15,.5], val:[.25,.55], ratio:[1.0,1.6]},
+    habitat:'서해 모래·펄 바닥', season:'9~11월',
+    avg:10, big:15, life:'몸통 8cm',
+    bait:['애기(스핏베이트)','소라 껍데기'],
+    ban:{from:'05-11', to:'08-31'}, minLen:null, grade:null, para:null, edible:true,
+    note:'가을 서해의 대표 손맛. 여름 넉 달이 금어기다.' },
+
+  { id:'crab', name:'꽃게', water:'바다', emoji:'🦀',
+    vision:{hue:[10,40], sat:[.2,.6], val:[.2,.5], ratio:[1.5,2.2]},
+    habitat:'서해 연안 모래바닥', season:'4~6월, 9~11월',
+    avg:12, big:18, life:'갑폭 20cm',
+    bait:['통발'],
+    ban:{from:'06-21', to:'08-20'}, minLen:6.4, lenType:'갑장', grade:null, para:null, edible:true,
+    note:'금지 기준은 갑장 6.4cm. 알을 밴 암컷은 연중 포획 금지.' },
+
+  { id:'gizzard', name:'전어', water:'바다', emoji:'🐟',
+    vision:{hue:[180,220], sat:[.1,.4], val:[.4,.75], ratio:[2.4,3.2]},
+    habitat:'내만·하구 얕은 곳', season:'9~11월',
+    avg:20, big:28, life:'최대 30cm',
+    bait:['훌치기','카고'],
+    ban:null, minLen:null, grade:null, para:null, edible:true,
+    note:'가을 한철 어종. 별도 금어기·체장 제한이 없다.' },
+
+  { id:'mullet', name:'숭어', water:'바다', emoji:'🐟',
+    vision:{hue:[190,230], sat:[.05,.3], val:[.35,.7], ratio:[3.5,4.5]},
+    habitat:'하구·방파제 표층', season:'11~3월',
+    avg:40, big:65, life:'최대 80cm',
+    bait:['훌치기','갯지렁이'],
+    ban:null, minLen:null, grade:null, para:null, edible:true,
+    note:'하구에서 흔히 점프하는 모습을 볼 수 있다.' },
+
+  { id:'halfbeak', name:'학공치', water:'바다', emoji:'📏',
+    vision:{hue:[190,230], sat:[.05,.3], val:[.5,.85], ratio:[6.0,9.0]},
+    habitat:'방파제 표층', season:'10~3월',
+    avg:22, big:35, life:'최대 40cm',
+    bait:['크릴 밑밥','작은 바늘'],
+    ban:null, minLen:null, grade:null, para:null, edible:true,
+    note:'아래턱만 길게 튀어나온 독특한 생김새.' }
+];
+
+/* ── 낚시 포인트 ─────────────────────────────────────────
+   type: '민물' | '바다',  night: 야간 가능,  park: 주차,  wc: 화장실
+   ───────────────────────────────────────────────────────── */
+const SPOTS = [
+  /* ── 고창·부안 (67세 김병국 님 생활권) ─────────────────── */
+  { id:'gc1', name:'동림저수지', type:'민물', lat:35.5163, lon:126.7264,
+    region:'고창 흥덕면', fish:['붕어','잉어','배스'],
+    park:true, wc:false, night:false, fee:'무료',
+    tip:'넓은 저수지라 자리가 넉넉하다. 둑길이 평평해 걷기 편하지만 그늘이 거의 없다.' },
+  { id:'gc2', name:'구시포항', type:'바다', lat:35.4472, lon:126.4275,
+    region:'고창 상하면', fish:['우럭','놀래미','주꾸미','감성돔'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'방파제 낚시터. 화장실·주차장이 갖춰져 있지만 바람 부는 날 파도가 넘칠 수 있다.' },
+  { id:'gc3', name:'동호항', type:'바다', lat:35.5033, lon:126.4408,
+    region:'고창 해리면', fish:['숭어','망둥어','광어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'갯벌과 항구가 함께 있어 초보도 편하다. 물때에 따라 자리가 크게 달라진다.' },
+  { id:'gc4', name:'인천강(주진천)', type:'민물', lat:35.4972, lon:126.5806,
+    region:'고창 아산면', fish:['붕어','메기','뱀장어'],
+    park:true, wc:false, night:true, fee:'무료',
+    tip:'선운사 가는 길목의 강. 나무 그늘이 있어 더운 날 좋고 바람도 덜 탄다.' },
+  { id:'gc5', name:'도솔제', type:'민물', lat:35.4986, lon:126.5744,
+    region:'고창 선운산', fish:['붕어','잉어'],
+    park:true, wc:false, night:false, fee:'무료',
+    tip:'산에 둘러싸인 조용한 소류지. 바람은 거의 없지만 길이 고르지 않아 조심해야 한다.' },
+  { id:'gc6', name:'격포항', type:'바다', lat:35.6208, lon:126.4633,
+    region:'부안 변산면', fish:['감성돔','우럭','농어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'차로 조금 더 가야 하지만 시설이 가장 잘 되어 있다. 방파제라 바람을 그대로 맞는다.' },
+
+  /* ── 수도권 ──────────────────────────────────────────── */
+  { id:'sp1', name:'소래포구 방파제', type:'바다', lat:37.3985, lon:126.7380,
+    region:'인천 남동구', fish:['우럭','전어','숭어','농어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'물때 영향이 큰 곳. 초들물~만조 전후가 피크.' },
+  { id:'sp2', name:'영종도 을왕리 갯바위', type:'바다', lat:37.4460, lon:126.3730,
+    region:'인천 중구', fish:['우럭','광어','놀래미'],
+    park:true, wc:true, night:false, fee:'무료',
+    tip:'간조 때 갯바위가 드러난다. 밀물 타이밍 주의.' },
+  { id:'sp3', name:'대부도 방아머리', type:'바다', lat:37.2620, lon:126.5750,
+    region:'경기 안산', fish:['우럭','광어','주꾸미'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'가을 주꾸미 시즌에 붐빈다. 주말 새벽 도착 권장.' },
+  { id:'sp4', name:'왕송호수', type:'민물', lat:37.3400, lon:126.9100,
+    region:'경기 의왕', fish:['붕어','잉어','배스','블루길'],
+    park:true, wc:true, night:false, fee:'무료',
+    tip:'수변 데크가 잘 되어 있어 입문자에게 편하다.' },
+  { id:'sp5', name:'팔당대교 하류 수로', type:'민물', lat:37.5450, lon:127.2350,
+    region:'경기 하남', fish:['붕어','잉어','메기','배스'],
+    park:true, wc:false, night:true, fee:'무료',
+    tip:'비 온 뒤 흙탕물에서 메기 활성이 좋다.' },
+  { id:'sp6', name:'청평호 상류', type:'민물', lat:37.7350, lon:127.4200,
+    region:'경기 가평', fish:['붕어','쏘가리','메기','잉어'],
+    park:true, wc:true, night:true, fee:'유료(좌대)',
+    tip:'쏘가리는 5/1~6/10 금어기. 시기 확인 필수.' },
+  { id:'sp7', name:'한강 뚝섬 지구', type:'민물', lat:37.5290, lon:127.0660,
+    region:'서울 광진', fish:['붕어','잉어','누치','배스'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'도심 접근성 최고. 지정 구역 외 낚시 금지 구간이 있으니 표지판 확인.' },
+  { id:'sp8', name:'제부도 방파제', type:'바다', lat:37.1780, lon:126.6120,
+    region:'경기 화성', fish:['우럭','광어','망둥어','주꾸미'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'물때에 따라 진입로가 잠긴다. 통행 시간표 확인 필수.' },
+  { id:'sp9', name:'용유도 마시안 해변', type:'바다', lat:37.4310, lon:126.3830,
+    region:'인천 중구', fish:['망둥어','우럭','광어'],
+    park:true, wc:true, night:false, fee:'무료',
+    tip:'모래바닥 원투 낚시에 적합.' },
+  { id:'sp10', name:'경안천 습지', type:'민물', lat:37.4200, lon:127.2600,
+    region:'경기 광주', fish:['붕어','잉어','블루길'],
+    park:false, wc:false, night:false, fee:'무료',
+    tip:'주차 공간이 좁다. 보호구역 표시 구간에는 진입 금지.' },
+  { id:'sp11', name:'오이도 빨간등대', type:'바다', lat:37.3450, lon:126.6900,
+    region:'경기 시흥', fish:['우럭','망둥어','숭어','전어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'가족 단위로 무난. 안전난간이 있어 초보에게 좋다.' },
+  { id:'sp12', name:'북한강 서종 수변', type:'민물', lat:37.6100, lon:127.3300,
+    region:'경기 양평', fish:['붕어','쏘가리','잉어','메기'],
+    park:true, wc:false, night:true, fee:'무료',
+    tip:'여울과 소가 번갈아 나온다. 쏘가리 루어 포인트.' }
+];
+
+/* ── 배지 ────────────────────────────────────────────────
+   check(state) → true 면 획득
+   ───────────────────────────────────────────────────────── */
+const BADGES = [
+  { id:'b_first',   icon:'🎣', name:'첫 조과',      desc:'첫 물고기를 기록했다',
+    check:s => s.catches.length >= 1 },
+  { id:'b_five',    icon:'🐟', name:'5마리',        desc:'기록 5건 달성',
+    check:s => s.catches.length >= 5 },
+  { id:'b_dex10',   icon:'📖', name:'도감 10종',    desc:'서로 다른 10종을 수집',
+    check:s => new Set(s.catches.map(c => c.fishId)).size >= 10 },
+  { id:'b_big40',   icon:'🏆', name:'대물 사냥꾼',  desc:'40cm 이상을 잡았다',
+    check:s => s.catches.some(c => c.len >= 40) },
+  { id:'b_release', icon:'💚', name:'방생의 미덕',  desc:'보호종·금지 대상을 방생 처리했다',
+    check:s => s.catches.some(c => c.released) },
+  { id:'b_rain',    icon:'🌧️', name:'비 오는 날',   desc:'강수 중에 조과를 올렸다',
+    check:s => s.catches.some(c => c.weather && c.weather.rain > 0) },
+  { id:'b_night',   icon:'🌙', name:'밤낚시',       desc:'20시~04시 사이에 기록했다',
+    check:s => s.catches.some(c => { const h = new Date(c.at).getHours(); return h >= 20 || h < 4; }) },
+  { id:'b_both',    icon:'🌊', name:'민물과 바다',  desc:'민물·바다 어종을 모두 수집',
+    check:s => { const w = new Set(s.catches.map(c => (FISH.find(f => f.id === c.fishId)||{}).water));
+                 return w.has('민물') && w.has('바다'); } },
+  { id:'b_spot3',   icon:'🗺️', name:'탐험가',       desc:'서로 다른 스팟 3곳에서 기록',
+    check:s => new Set(s.catches.map(c => c.spotId).filter(Boolean)).size >= 3 },
+  { id:'b_friend',  icon:'🤝', name:'동출',         desc:'친구를 1명 이상 연결했다',
+    check:s => s.friends.length >= 1 }
+];
+
+/* ── 주간 챌린지 풀 (주차 번호로 하나 선택) ───────────── */
+const CHALLENGES = [
+  { id:'c1', title:'이번 주 붕어 3마리', goal:3, icon:'🐟',
+    match:c => c.fishId === 'crucian' },
+  { id:'c2', title:'30cm 이상 1마리', goal:1, icon:'📏',
+    match:c => c.len >= 30 },
+  { id:'c3', title:'새로운 어종 2종 수집', goal:2, icon:'✨',
+    match:null, kind:'newSpecies' },
+  { id:'c4', title:'바다 어종 2마리', goal:2, icon:'🌊',
+    match:c => (FISH.find(f => f.id === c.fishId)||{}).water === '바다' },
+  { id:'c5', title:'서로 다른 스팟 2곳', goal:2, icon:'🗺️',
+    match:null, kind:'spots' },
+  { id:'c6', title:'루어로 1마리', goal:1, icon:'🎯',
+    match:c => c.method === '루어' }
+];
+
+/* 크기 측정용 기준물 (실측 표준 규격) */
+const REFERENCES = [
+  { id:'card',   name:'신용카드 긴 변', cm:8.56 },
+  { id:'coin500',name:'500원 동전 지름', cm:2.65 },
+  { id:'coin100',name:'100원 동전 지름', cm:2.40 },
+  { id:'a4w',    name:'A4 용지 짧은 변', cm:21.0 },
+  { id:'ruler',  name:'30cm 자',        cm:30.0 },
+  { id:'custom', name:'직접 입력',       cm:null }
+];
+
+</script>
+<script>
+/* ===== vision.js ===== */
+/* ============================================================
+   낚시 도감 — 사진 판별 & 크기 측정
+   ------------------------------------------------------------
+   ⚠️ 판별기의 정체를 분명히 해 둔다.
+   이 파일의 identify()는 학습된 신경망이 아니라, 사진의 색·형태
+   특징을 data.js 의 어종 프로필과 맞춰 보는 "규칙 기반 데모
+   판별기"다. 실제 서비스라면 이 자리에 어류 분류 모델이 들어간다.
+   그래서 결과는 항상 후보 3개 + 확신도로만 제시하고, 확신도가
+   낮으면 자동 확정하지 않고 사용자에게 넘긴다.
+
+   반면 measure()는 진짜다. 사진 속 기준물의 실제 길이를 알면
+   픽셀 비례로 물고기 길이를 구하는 것은 정확한 계산이다.
+   ============================================================ */
+const Vision = (() => {
+
+  /* ── RGB → HSV ─────────────────────────────────────────── */
+  function rgb2hsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) {
+      if (mx === r)      h = ((g - b) / d) % 6;
+      else if (mx === g) h = (b - r) / d + 2;
+      else               h = (r - g) / d + 4;
+      h *= 60; if (h < 0) h += 360;
+    }
+    return { h, s: mx ? d / mx : 0, v: mx };
+  }
+
+  /* ── 사진에서 피사체(물고기) 영역을 대충 떼어낸다 ────────
+     테두리 픽셀의 평균색을 '배경'으로 보고, 그와 충분히 다른
+     픽셀만 피사체로 친다. 완벽하지 않지만 손·바닥·물 위에 놓고
+     찍은 전형적인 조과 사진에서는 그럭저럭 동작한다.
+     ───────────────────────────────────────────────────────── */
+  function extract(img) {
+    const W = 200;
+    const H = Math.max(1, Math.round(img.naturalHeight / img.naturalWidth * W));
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const cx = cv.getContext('2d', { willReadFrequently: true });
+    cx.drawImage(img, 0, 0, W, H);
+    const px = cx.getImageData(0, 0, W, H).data;
+
+    const at = (x, y) => { const i = (y * W + x) * 4; return [px[i], px[i+1], px[i+2]]; };
+
+    /* 배경색 = 테두리 2px 평균 */
+    let br = 0, bg = 0, bb = 0, bn = 0;
+    for (let x = 0; x < W; x++) for (const y of [0, 1, H-2, H-1]) {
+      if (y < 0 || y >= H) continue;
+      const c = at(x, y); br += c[0]; bg += c[1]; bb += c[2]; bn++;
+    }
+    for (let y = 0; y < H; y++) for (const x of [0, 1, W-2, W-1]) {
+      if (x < 0 || x >= W) continue;
+      const c = at(x, y); br += c[0]; bg += c[1]; bb += c[2]; bn++;
+    }
+    br /= bn; bg /= bn; bb /= bn;
+
+    /* 배경과 다른 픽셀 모으기 */
+    const TH = 52;
+    let minX = W, minY = H, maxX = 0, maxY = 0, n = 0;
+    let sumS = 0, sumV = 0, hx = 0, hy = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const [r, g, b] = at(x, y);
+      const d = Math.abs(r - br) + Math.abs(g - bg) + Math.abs(b - bb);
+      if (d < TH) continue;
+      n++;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      const hsv = rgb2hsv(r, g, b);
+      sumS += hsv.s; sumV += hsv.v;
+      const rad = hsv.h * Math.PI / 180;      /* 색상은 원형이라 벡터 평균 */
+      hx += Math.cos(rad) * hsv.s; hy += Math.sin(rad) * hsv.s;
+    }
+
+    if (n < W * H * 0.02) {                    /* 피사체를 못 찾음 */
+      return { ok: false };
+    }
+
+    let hue = Math.atan2(hy, hx) * 180 / Math.PI;
+    if (hue < 0) hue += 360;
+    const bw = maxX - minX + 1, bh = maxY - minY + 1;
+
+    return {
+      ok: true,
+      hue,
+      sat: sumS / n,
+      val: sumV / n,
+      ratio: bw >= bh ? bw / bh : bh / bw,     /* 세워 찍어도 되게 긴 쪽 기준 */
+      fill: n / (bw * bh),
+      box: { x: minX / W, y: minY / H, w: bw / W, h: bh / H }
+    };
+  }
+
+  /* ── 특징 ↔ 어종 프로필 유사도 ─────────────────────────── */
+  function hueDist(h, range) {
+    const [a, b] = range;
+    const inRange = a <= b ? (h >= a && h <= b)
+                           : (h >= a || h <= b);          /* 340~20 처럼 0을 넘는 구간 */
+    if (inRange) return 0;
+    const d = x => { let t = Math.abs(h - x); return t > 180 ? 360 - t : t; };
+    return Math.min(d(a), d(b));
+  }
+  function rangeDist(v, [a, b]) {
+    return v < a ? a - v : (v > b ? v - b : 0);
+  }
+
+  function score(feat, fish) {
+    const V = fish.vision;
+    let s = 100;
+    s -= Math.min(45, hueDist(feat.hue, V.hue) * 0.55);      /* 색상 */
+    s -= Math.min(20, rangeDist(feat.sat, V.sat) * 90);      /* 채도 */
+    s -= Math.min(15, rangeDist(feat.val, V.val) * 70);      /* 밝기 */
+    s -= Math.min(35, rangeDist(feat.ratio, V.ratio) * 14);  /* 체형 — 가장 결정적 */
+    return Math.max(0, s);
+  }
+
+  /* ── 어종 판별 ─────────────────────────────────────────
+     ctx.water 가 주어지면(스팟이 민물/바다인지) 해당 수역
+     어종에 가산점을 준다. 실제로도 가장 강력한 단서다.
+     ───────────────────────────────────────────────────────── */
+  function identify(feat, ctx) {
+    ctx = ctx || {};
+    const scored = FISH.map(f => {
+      let s = score(feat, f);
+      if (ctx.water && f.water === ctx.water) s += 12;
+      else if (ctx.water) s -= 10;
+      if (f.grade === 'protected') s -= 6;     /* 희소종을 함부로 1순위로 올리지 않는다 */
+      return { fish: f, raw: Math.max(0, s) };
+    }).sort((a, b) => b.raw - a.raw);
+
+    const top = scored.slice(0, 3);
+    const sum = top.reduce((t, x) => t + Math.pow(x.raw, 2.2), 0) || 1;
+    return top.map(x => ({
+      fish: x.fish,
+      confidence: Math.round(Math.pow(x.raw, 2.2) / sum * 100)
+    }));
+  }
+
+  /* ── 두 점 사이 거리(픽셀) ──────────────────────────────── */
+  function dist(p, q) { return Math.hypot(p.x - q.x, p.y - q.y); }
+
+  /* ── 크기 측정 ─────────────────────────────────────────
+     refPts  : 기준물 양 끝 두 점 (정규화 좌표 0~1)
+     fishPts : 물고기 주둥이~꼬리끝 두 점
+     refCm   : 기준물 실제 길이
+     반환 cm 와 오차(±). 오차는 클릭 정밀도(약 1.5% 화면폭)에서 유도.
+     ───────────────────────────────────────────────────────── */
+  function measure(refPts, fishPts, refCm) {
+    const rp = dist(refPts[0], refPts[1]);
+    const fp = dist(fishPts[0], fishPts[1]);
+    if (rp < 0.01) return null;
+    const cm = fp / rp * refCm;
+    const rel = 0.015 * (1 / rp + 1 / fp);          /* 점 찍기 오차 전파 */
+    const err = Math.max(0.5, cm * Math.min(0.25, rel));
+    return { cm: Math.round(cm * 10) / 10, err: Math.round(err * 10) / 10 };
+  }
+
+  /* ── 사진 지문(average hash) ────────────────────────────
+     랭킹 검증(S-5)에서 같은 사진을 다시 올린 기록을 걸러낸다.
+     ───────────────────────────────────────────────────────── */
+  function hash(img) {
+    const N = 8;
+    const cv = document.createElement('canvas');
+    cv.width = N; cv.height = N;
+    const cx = cv.getContext('2d', { willReadFrequently: true });
+    cx.drawImage(img, 0, 0, N, N);
+    const d = cx.getImageData(0, 0, N, N).data;
+    const g = [];
+    for (let i = 0; i < N * N; i++)
+      g.push(0.299*d[i*4] + 0.587*d[i*4+1] + 0.114*d[i*4+2]);
+    const avg = g.reduce((a, b) => a + b, 0) / g.length;
+    let out = '';
+    for (let i = 0; i < g.length; i += 4) {
+      let nib = 0;
+      for (let k = 0; k < 4; k++) if (g[i+k] > avg) nib |= (1 << k);
+      out += nib.toString(16);
+    }
+    return out;
+  }
+  function hashClose(a, b) {          /* 해밍 거리 5 이하면 같은 사진으로 본다 */
+    if (!a || !b || a.length !== b.length) return false;
+    let d = 0;
+    for (let i = 0; i < a.length; i++) {
+      const p = parseInt(a[i], 16), q = parseInt(b[i], 16);
+      /* 16진수가 아닌 값이 섞이면 비교 자체가 성립하지 않는다.
+         NaN^NaN 은 0 이라 그냥 두면 "완전히 같은 사진"으로 오판한다. */
+      if (Number.isNaN(p) || Number.isNaN(q)) return false;
+      let x = p ^ q;
+      while (x) { d += x & 1; x >>= 1; }
+      if (d > 5) return false;
+    }
+    return true;
+  }
+
+  /* ── 저장용 축소 이미지 (localStorage 용량 절약) ────────── */
+  function thumbnail(img, max) {
+    max = max || 640;
+    const sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const cv = document.createElement('canvas');
+    cv.width  = Math.round(img.naturalWidth * sc);
+    cv.height = Math.round(img.naturalHeight * sc);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    return cv.toDataURL('image/jpeg', 0.72);
+  }
+
+  return { extract, identify, measure, hash, hashClose, thumbnail, rgb2hsv };
+})();
+
+</script>
+<script>
+/* ===== app.js ===== */
+/* ============================================================
+   낚시 도감 — 앱 본체
+   ------------------------------------------------------------
+   R-1 날씨/스팟 · R-2 사진 기록 · R-3 법규 알림 · R-4 도감 · R-5 친구
+   서버 없이 브라우저 안에서만 돈다. 날씨만 실제 API(Open-Meteo)를
+   쓰고, 나머지 데이터는 localStorage 에 담긴다.
+   ============================================================ */
+'use strict';
+
+/* ══════════════════════════════════════════════════════════
+   0. 상태
+   ══════════════════════════════════════════════════════════ */
+const KEY = 'fishdex.v1';
+const DEFAULT_LOC = { lat: 35.4356, lon: 126.7019, name: '고창읍 (기본 위치)' };
+
+let S = load();
+let LOC = { ...DEFAULT_LOC };
+let WX = null;                  /* 슬롯별 날씨·지수 */
+let NOW = null;                 /* 지금 이 순간의 실황 (상단 위젯) */
+let slotIdx = 0;                /* 현재 보고 있는 시간대 */
+let spotFilter = 'all';
+let dexFilter = 'all';
+let rankMode = 'len';
+
+/* 기록 작성 중인 임시 상태 */
+let draft = null;
+
+function load() {
+  let s = {};
+  try { s = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+  return Object.assign({
+    nick: '나',
+    code: null,
+    privacy: 'spot',
+    catches: [],
+    friends: [],
+    pending: [],
+    reviews: {},
+    likes: {},
+    badges: [],
+    regOverride: {}
+  }, s);
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(S));
+  } catch (e) {
+    /* 용량이 차면 오래된 기록의 사진부터 버린다 */
+    for (const c of S.catches) { if (c.photo) { delete c.photo; break; } }
+    try { localStorage.setItem(KEY, JSON.stringify(S)); toast('저장 공간이 부족해 오래된 사진을 지웠습니다'); }
+    catch (e2) { toast('저장에 실패했습니다'); }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   1. 유틸
+   ══════════════════════════════════════════════════════════ */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.prototype.slice.call(document.querySelectorAll(s));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g,
+  c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+function toast(msg, ms) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.remove('hide');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.add('hide'), ms || 2400);
+}
+function pad(n) { return n < 10 ? '0' + n : '' + n; }
+function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+function mmdd(d) { return pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return (d.getMonth()+1) + '월 ' + d.getDate() + '일 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function daysAgo(iso) {
+  const d = Math.floor((Date.now() - new Date(iso)) / 86400000);
+  return d <= 0 ? '오늘' : d === 1 ? '어제' : d + '일 전';
+}
+function fishById(id) { return FISH.find(f => f.id === id); }
+/* 받침 유무에 따라 조사를 고른다 — "감돌고기은(는)" 같은 표기를 피하려고 */
+function hasJong(w) {
+  const c = w.charCodeAt(w.length - 1);
+  return c >= 0xAC00 && c <= 0xD7A3 ? (c - 0xAC00) % 28 !== 0 : false;
+}
+function josa(w, a, b) { return w + (hasJong(w) ? a : b); }   /* josa('붕어','은','는') */
+function km(a, b) {
+  const R = 6371, r = Math.PI/180;
+  const dLat = (b.lat-a.lat)*r, dLon = (b.lon-a.lon)*r;
+  const x = Math.sin(dLat/2)**2 +
+            Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - y0) / 86400000 + 1) / 7);
+}
+function weekStart(d) {
+  const x = new Date(d); const wd = (x.getDay() + 6) % 7;   /* 월요일 시작 */
+  x.setDate(x.getDate() - wd); x.setHours(0,0,0,0); return x;
+}
+
+/* ══════════════════════════════════════════════════════════
+   2. 법규 판정  (F-7 / F-8 / F-9 / S-4)
+   ══════════════════════════════════════════════════════════ */
+
+/* 운영자 수정본을 얹은 규정 */
+function reg(fish) {
+  const o = S.regOverride[fish.id] || {};
+  return {
+    ban:    'ban'    in o ? o.ban    : fish.ban,
+    minLen: 'minLen' in o ? o.minLen : fish.minLen,
+    grade:  'grade'  in o ? o.grade  : fish.grade,
+    lenType: fish.lenType || '전장',
+    minAnal: fish.minAnal || null,
+    date:   o.date || REG_META.baseDate,
+    edited: !!Object.keys(o).length
+  };
+}
+
+/* 오늘이 금어기 안인가 (연말을 넘기는 구간도 처리) */
+function inBan(ban, date) {
+  if (!ban) return false;
+  const t = mmdd(date);
+  return ban.from <= ban.to ? (t >= ban.from && t <= ban.to)
+                            : (t >= ban.from || t <= ban.to);
+}
+function banText(ban) {
+  const f = ban.from.split('-'), t = ban.to.split('-');
+  return `${+f[0]}월 ${+f[1]}일 ~ ${+t[0]}월 ${+t[1]}일`;
+}
+
+/* 하나의 조과에 대한 모든 판정을 만든다 */
+function judge(fish, len, when) {
+  const R = reg(fish);
+  const out = [];
+  const src = `출처 ${REG_META.source} · 기준일 ${R.date}${R.edited ? ' (운영자 수정본)' : ''}`;
+  const date = when ? new Date(when) : new Date();
+
+  /* F-7 보호종 */
+  if (R.grade === 'protected') {
+    out.push({ lv:'bad', kind:'protected', icon:'shield', title:'보호종입니다 — 즉시 방생하세요',
+      body:`${fish.note} 사진만 남기고 바로 놓아주세요. 이 기록은 '포획'이 아니라 '관찰'로 저장됩니다.`,
+      src, force:'release' });
+  }
+  /* 생태계교란종 */
+  if (R.grade === 'invasive') {
+    out.push({ lv:'warn', icon:'warning', title:'생태계교란 생물입니다',
+      body:`${josa(fish.name,'은','는')} 살아있는 상태로 다른 수역에 옮기거나 방류하는 행위가 금지되어 있습니다. 잡은 자리에서 처리하세요.`,
+      src });
+  }
+  /* 측정값이 그 어종의 상식을 벗어나면 — 어종 오판이거나 측정 실수다 */
+  if (len && fish.big && len > fish.big * 1.6) {
+    out.push({ lv:'warn', icon:'help', title:'이 어종치고는 너무 큽니다',
+      body:`${fish.name}의 대물 기준은 ${fish.big}cm 인데 측정값이 ${len}cm 입니다. 어종을 잘못 골랐거나, 기준물을 비스듬히 찍어 길이가 부풀려졌을 수 있습니다. 다시 확인해 주세요.`,
+      src:'앱 자체 검증' });
+  }
+  /* F-8 금어기 */
+  if (R.ban) {
+    if (inBan(R.ban, date)) {
+      out.push({ lv:'bad', icon:'block', title:`지금은 금어기입니다 (${banText(R.ban)})`,
+        body:`${fish.name} 산란기 포획 금지 기간에 해당합니다. 방생해 주세요. 금어기는 시·도 조례로 달라질 수 있습니다.`,
+        src, force:'release' });
+    } else {
+      out.push({ lv:'ok', icon:'event_available', title:'금어기 아님',
+        body:`${fish.name} 금어기는 ${banText(R.ban)}입니다. 오늘은 해당하지 않습니다.`, src });
+    }
+  }
+  /* F-8 금지체장 */
+  if (R.minLen != null && len != null) {
+    const label = R.lenType === '전장' ? '' : `(${R.lenType} 기준) `;
+    if (len < R.minLen) {
+      out.push({ lv:'bad', icon:'straighten', title:`금지체장 미달 — ${R.minLen}cm 미만`,
+        body:`${label}측정값 ${len}cm 는 포획 금지 크기입니다. 방생 대상입니다.`, src, force:'release' });
+    } else if (len < R.minLen * 1.1) {
+      out.push({ lv:'warn', icon:'straighten', title:'금지체장 경계 — 재확인 권장',
+        body:`${label}기준 ${R.minLen}cm 에 근접한 ${len}cm 입니다. 측정 오차를 감안해 자로 다시 재 보세요.`, src });
+    } else {
+      out.push({ lv:'ok', icon:'straighten', title:'체장 기준 충족',
+        body:`${label}기준 ${R.minLen}cm 이상입니다 (측정 ${len}cm).`, src });
+    }
+  } else if (R.minAnal) {
+    out.push({ lv:'warn', icon:'straighten', title:`항문장 ${R.minAnal}cm 기준 어종`,
+      body:'전장이 아니라 주둥이~항문 길이로 판정합니다. 앱의 전장 측정값으로는 판단할 수 없으니 직접 확인하세요.', src });
+  }
+  /* F-9 기생충 */
+  if (fish.water === '민물' && fish.para) {
+    const hard = fish.para === 'high';
+    out.push({ lv: hard ? 'warn' : 'warn', icon:'coronavirus',
+      title: hard ? '민물고기 생식 금지 — 간흡충 위험' : '민물고기 — 익혀 드세요',
+      body:'민물고기 회는 간흡충(간디스토마) 감염의 주요 경로입니다. 반드시 충분히 익혀 드시고, 손질에 쓴 도마·칼은 다른 식재료와 분리해 세척하세요. 이 안내는 질병관리청 공개 자료를 옮긴 것이며 의학적 진단이 아닙니다.',
+      src:'출처 질병관리청 감염병 정보' });
+  }
+  if (fish.water === '바다' && fish.edible) {
+    out.push({ lv:'ok', icon:'restaurant', title:'식용 가능',
+      body:'해산 어종은 아니사키스 등 기생충이 있을 수 있으니 신선도와 내장 제거 상태를 확인하세요.',
+      src:'출처 질병관리청 감염병 정보' });
+  }
+  return out;
+}
+
+/* ══════════════════════════════════════════════════════════
+   3. 날씨 & 낚시 지수  (F-1 / S-1)
+   ══════════════════════════════════════════════════════════ */
+const SLOTS = [
+  { day:0, key:'am',    label:'오늘 오전', h:[6,11] },
+  { day:0, key:'pm',    label:'오늘 오후', h:[12,17] },
+  { day:0, key:'night', label:'오늘 밤',   h:[18,23] },
+  { day:1, key:'am',    label:'내일 오전', h:[6,11] },
+  { day:1, key:'pm',    label:'내일 오후', h:[12,17] },
+  { day:1, key:'night', label:'내일 밤',   h:[18,23] }
+];
+
+const API = 'https://api.open-meteo.com/v1/forecast';
+const CURRENT = 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,weather_code,is_day';
+
+async function loadWeather() {
+  const url = API
+    + `?latitude=${LOC.lat.toFixed(3)}&longitude=${LOC.lon.toFixed(3)}`
+    + '&hourly=temperature_2m,relative_humidity_2m,precipitation,surface_pressure,wind_speed_10m,cloud_cover,weather_code'
+    + `&current=${CURRENT}`
+    + '&forecast_days=3&timezone=Asia%2FSeoul&wind_speed_unit=ms';
+  let h = null;
+  $('#btn-loc').classList.add('loading');
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('http ' + r.status);
+    const j = await r.json();
+    h = j.hourly;
+    NOW = j.current ? Object.assign({ live: true, at: Date.now() }, j.current) : null;
+  } catch (e) {
+    toast('날씨를 못 불러와 예시 값으로 보여드립니다');
+    h = mockHourly();
+    NOW = null;
+  }
+  $('#btn-loc').classList.remove('loading');
+  WX = SLOTS.map(sl => slotWeather(h, sl));
+  if (!NOW && WX[0]) {                       /* 통신 실패 — 예시 값으로 대신 채운다 */
+    NOW = { live:false, at:Date.now(), temperature_2m:WX[0].t, apparent_temperature:WX[0].t,
+            precipitation:WX[0].rain, wind_speed_10m:WX[0].wind, weather_code:WX[0].code, relative_humidity_2m:WX[0].hum,
+            is_day: new Date().getHours() >= 6 && new Date().getHours() < 19 ? 1 : 0 };
+  }
+  renderNow();
+  render1();
+}
+
+/* ── 상단 실시간 날씨 위젯 ─────────────────────────────
+   지금 이 순간의 관측/실황만 가볍게 다시 받아 온다.
+   예보(hourly) 전체를 매번 다시 받을 필요는 없다.
+   ───────────────────────────────────────────────────────── */
+const STALE = 20 * 60 * 1000;      /* 이보다 오래된 값은 '실시간'이라 부르지 않는다 */
+
+async function fetchCurrent() {
+  const url = API
+    + `?latitude=${LOC.lat.toFixed(3)}&longitude=${LOC.lon.toFixed(3)}`
+    + `&current=${CURRENT}&timezone=Asia%2FSeoul&wind_speed_unit=ms`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('http ' + r.status);
+    const j = await r.json();
+    if (j.current) {
+      NOW = Object.assign({ live: true, at: Date.now() }, j.current);
+      renderNow();
+    }
+  } catch (e) { /* 조용히 실패 — 직전 값을 그대로 둔다 */ }
+}
+
+/* WMO 기상 코드 → 사람이 읽는 설명 (세기까지 구분) */
+const WMO_TEXT = {
+  0:'맑음', 1:'대체로 맑음', 2:'구름 조금', 3:'흐림',
+  45:'안개', 48:'서리 안개',
+  51:'약한 이슬비', 53:'이슬비', 55:'강한 이슬비',
+  56:'어는 이슬비', 57:'강한 어는 이슬비',
+  61:'약한 비', 63:'비', 65:'강한 비',
+  66:'어는 비', 67:'강한 어는 비',
+  71:'약한 눈', 73:'눈', 75:'강한 눈', 77:'싸락눈',
+  80:'약한 소나기', 81:'소나기', 82:'강한 소나기',
+  85:'약한 소낙눈', 86:'강한 소낙눈',
+  95:'천둥번개', 96:'천둥번개(우박)', 99:'강한 천둥번개(우박)'
+};
+
+/* WMO 기상 코드 → 아이콘과 이름 (아이콘은 낮/밤을 가린다) */
+function wmo(code, day) {
+  const n = day === 0;
+  const t = WMO_TEXT[code] || '알 수 없음';
+  let i;
+  if (code === 0)       i = n ? '🌙' : '☀️';
+  else if (code === 1)  i = n ? '🌙' : '🌤️';
+  else if (code === 2)  i = n ? '☁️' : '⛅';
+  else if (code === 3)  i = '☁️';
+  else if (code <= 48)  i = '🌫️';
+  else if (code <= 57)  i = '🌦️';
+  else if (code <= 67)  i = '🌧️';
+  else if (code <= 77)  i = '🌨️';
+  else if (code <= 82)  i = '🌦️';
+  else if (code <= 86)  i = '🌨️';
+  else                  i = '⛈️';
+  return { i, t };
+}
+
+function renderNow() {
+  if (!NOW) return;
+  const w = wmo(NOW.weather_code, NOW.is_day);
+  const wind = Math.round(NOW.wind_speed_10m * 10) / 10;
+  const age = Date.now() - NOW.at;
+  const stale = age > STALE;                 /* 탭이 오래 백그라운드에 있었던 경우 */
+
+  $('#wx-ico').textContent  = w.i;
+  $('#wx-temp').textContent = Math.round(NOW.temperature_2m * 10) / 10 + '°';
+  $('#wx-sub').textContent  = stale
+    ? `${Math.round(age / 60000)}분 전 · 눌러서 갱신`
+    : NOW.precipitation > 0 ? `${w.t} ${NOW.precipitation}mm`
+                            : `${w.t} · 바람 ${wind}`;
+  /* 초록 점은 "지금 값"일 때만. 멈춘 값에 켜 두면 거짓말이 된다. */
+  $('#wx-live').classList.toggle('off', !NOW.live || stale);
+  $('#btn-loc').title = !NOW.live
+    ? '통신이 안 돼 예시 값을 보여주는 중입니다. 눌러서 다시 시도하세요.'
+    : `지금 ${w.t} ${NOW.temperature_2m}° · 체감 ${NOW.apparent_temperature}° · 바람 ${wind}m/s`
+      + (NOW.relative_humidity_2m != null ? ` · 습도 ${NOW.relative_humidity_2m}%` : '')
+      + `\n${LOC.name} · ${String(NOW.time || '').replace('T',' ')} 기준`
+      + (stale ? '\n갱신이 멈춘 지 오래됐습니다 — 눌러서 새로고침'
+               : '\n5분마다 자동 갱신 · 눌러서 지금 새로고침');
+}
+
+/* 인터넷이 없을 때 쓰는 대체 값 */
+function mockHourly() {
+  const t0 = new Date(); t0.setMinutes(0,0,0); t0.setHours(0);
+  const time = [], temp = [], pre = [], pres = [], wind = [], cloud = [], code = [];
+  for (let i = 0; i < 72; i++) {
+    const d = new Date(t0.getTime() + i*3600000);
+    time.push(d.toISOString().slice(0,16));
+    const hh = d.getHours();
+    temp.push(Math.round((14 + 8*Math.sin((hh-8)/24*2*Math.PI)) * 10)/10);
+    pre.push(i % 29 === 0 ? 0.4 : 0);
+    pres.push(1012 + Math.sin(i/17)*4);
+    wind.push(Math.max(0.5, 3 + 2.4*Math.sin(i/9)));
+    cloud.push(Math.round(40 + 40*Math.sin(i/13)));
+    code.push(pre[i] > 0 ? 61 : 2);
+  }
+  return { time, temperature_2m:temp, precipitation:pre, surface_pressure:pres,
+           wind_speed_10m:wind, cloud_cover:cloud, weather_code:code };
+}
+
+function slotWeather(h, sl) {
+  const base = new Date(); base.setHours(0,0,0,0);
+  const day = new Date(base.getTime() + sl.day*86400000);
+  const want = ymd(day);
+  const idx = [];
+  for (let i = 0; i < h.time.length; i++) {
+    const t = h.time[i];
+    if (t.slice(0,10) !== want) continue;
+    const hh = +t.slice(11,13);
+    if (hh >= sl.h[0] && hh <= sl.h[1]) idx.push(i);
+  }
+  if (!idx.length) return null;
+  const avg = arr => idx.reduce((s,i) => s + (arr[i] || 0), 0) / idx.length;
+  const mx  = arr => idx.reduce((s,i) => Math.max(s, arr[i] || 0), 0);
+
+  const w = {
+    slot: sl,
+    t: Math.round(avg(h.temperature_2m) * 10) / 10,
+    rain: Math.round(mx(h.precipitation) * 10) / 10,
+    wind: Math.round(avg(h.wind_speed_10m) * 10) / 10,
+    gust: Math.round(mx(h.wind_speed_10m) * 10) / 10,
+    cloud: Math.round(avg(h.cloud_cover)),
+    hum: h.relative_humidity_2m ? Math.round(avg(h.relative_humidity_2m)) : null,
+    p: Math.round(avg(h.surface_pressure) * 10) / 10,
+    code: h.weather_code ? h.weather_code[idx[0]] : 0
+  };
+  const i0 = idx[0];
+  const prev = h.surface_pressure[Math.max(0, i0 - 6)];
+  w.dp = Math.round((h.surface_pressure[i0] - prev) * 10) / 10;
+  Object.assign(w, scoreWeather(w));
+  return w;
+}
+
+/* 원자료 → 0~100 점수 + 한 줄 코멘트 */
+function scoreWeather(w) {
+  let s = 50;
+  const why = [];
+  /* d: 점수에 준 영향. 코멘트는 영향이 큰 것부터 고른다 —
+     그래야 "30도가 넘습니다" 같은 결정적인 말이 뒤로 밀리지 않는다. */
+  const add = (d, txt) => { s += d; if (txt) why.push({ d: Math.abs(d), txt }); };
+
+  if (w.wind < 1.5)      add(-6,  '바람이 거의 없어 입질 신호가 둔합니다');
+  else if (w.wind <= 5)  add(14,  '적당한 바람이 불어 조건이 좋습니다');
+  else if (w.wind <= 8)  add(2);
+  else if (w.wind <= 11) add(-18, '바람이 강해 채비 관리가 어렵습니다');
+  else                   add(-34, `풍속 ${w.wind}m/s 강풍입니다`);
+
+  if (w.rain === 0)      add(2);
+  else if (w.rain < 1)   add(10,  '가랑비가 오히려 활성을 올려 줍니다');
+  else if (w.rain < 4)   add(-4,  '비가 제법 옵니다');
+  else                   add(-22, `시간당 ${w.rain}mm 강한 비가 예보돼 있습니다`);
+
+  if (w.cloud >= 60)     add(8,   '흐린 하늘이 경계심을 낮춰 줍니다');
+  else if (w.cloud >= 30)add(4);
+  else                   add(0,   '맑고 볕이 강해 낮에는 깊은 자리를 노려야 합니다');
+
+  if (w.dp < -3)         add(6,   '기압이 급하게 떨어지는 중입니다');
+  else if (w.dp < -0.5)  add(10,  '기압이 완만히 내려가 활성이 오를 시간대입니다');
+  else if (w.dp > 3)     add(-10, '기압이 빠르게 오르는 중이라 입질이 뜸할 수 있습니다');
+  else                   add(2);
+
+  if (w.t >= 10 && w.t <= 25) add(12);
+  else if ((w.t >= 5 && w.t < 10) || (w.t > 25 && w.t <= 30)) add(4);
+  else add(-14, w.t < 5 ? `기온 ${w.t}도로 활성이 크게 떨어집니다`
+                        : `기온 ${w.t}도, 한낮은 피하고 아침저녁을 노리세요`);
+
+  if (w.slot.key === 'am')         add(8, '아침 시간대는 대체로 유리합니다');
+  else if (w.slot.key === 'night') add(5, '밤에 활성이 오르는 어종이 많습니다');
+
+  s = Math.max(5, Math.min(98, Math.round(s)));
+
+  const risk = w.gust >= 12 || w.rain >= 5;
+  const label = s >= 80 ? '최고의 날' : s >= 65 ? '좋음' : s >= 50 ? '무난함'
+              : s >= 35 ? '아쉬움' : '비추천';
+  const text = why.sort((a, b) => b.d - a.d).slice(0, 2).map(x => x.txt).join('. ');
+  return { score: s, label, why: text ? text + '.' : '', risk };
+}
+
+/* ══════════════════════════════════════════════════════════
+   4. 화면 1 — 오늘
+   ══════════════════════════════════════════════════════════ */
+function render1() {
+  if (!WX) return;
+  const w = WX[slotIdx] || WX[0];
+
+  /* 시간대 버튼 */
+  /* 좁은 화면에서 "오늘 오 전"처럼 깨지지 않게 날짜/시간대를 두 줄로 나눈다 */
+  $('#slot-seg').innerHTML = WX.map((x, i) => {
+    if (!x) return '';
+    const p = x.slot.label.split(' ');
+    return `<button data-slot="${i}" class="${i===slotIdx?'on':''} ${x.risk?'risk':''}">
+      <i>${esc(p[0])}</i>${esc(p[1] || '')}<b>${x.score}</b></button>`;
+  }).join('');
+  $$('#slot-seg button').forEach(b => b.onclick = () => { slotIdx = +b.dataset.slot; render1(); });
+
+  /* 지수 카드 */
+  $('#idx-when').textContent  = w.slot.label;
+  $('#idx-place').textContent = LOC.name;
+  $('#idx-num').textContent   = w.score;
+  $('#idx-label').textContent = w.label;
+  $('#idx-comment').textContent = w.why || '특별히 눈에 띄는 요소는 없습니다.';
+  $('#idx-facts').innerHTML =
+    `<div><b>${w.t}°</b><small>기온</small></div>` +
+    `<div><b>${w.wind}</b><small>바람 m/s</small></div>` +
+    `<div><b>${w.rain}</b><small>강수 mm</small></div>` +
+    (w.hum != null ? `<div><b>${w.hum}%</b><small>습도</small></div>` : '') +
+    `<div><b>${w.dp > 0 ? '+' : ''}${w.dp}</b><small>기압 변화</small></div>`;
+  $('#top-sub').textContent = `${w.slot.label} 낚시지수 ${w.score}점 · ${w.label}`;
+
+  /* S-1 악천후 경고 */
+  const sb = $('#storm-banner');
+  if (w.risk) {
+    sb.classList.remove('hide');
+    $('#storm-title').textContent = '기상 경고 — 출조를 미루세요';
+    const parts = [];
+    if (w.gust >= 12) parts.push(`순간 풍속 ${w.gust}m/s`);
+    if (w.rain >= 5)  parts.push(`시간당 강수 ${w.rain}mm`);
+    $('#storm-body').textContent =
+      parts.join(' · ') + ' 이 예보된 시간대입니다. 방파제·갯바위는 특히 위험하니 이 시간대 스팟 추천은 접어 두었습니다.';
+  } else sb.classList.add('hide');
+
+  renderSpots(w);
+}
+
+function spotScore(sp, w) {
+  let s = w.score;
+  if (sp.type === '바다') {                       /* 바다는 바람에 더 민감 */
+    if (w.wind > 8) s -= 14; else if (w.wind > 5) s -= 5;
+  } else {
+    if (w.rain >= 4) s -= 6;
+  }
+  if (!sp.night && w.slot.key === 'night') s -= 25;
+  const d = km(LOC, sp);
+  s -= Math.min(12, d / 8);
+  return { s: Math.max(3, Math.round(s)), d };
+}
+
+function renderSpots(w) {
+  const list = SPOTS
+    .filter(sp => spotFilter === 'all' || sp.type === spotFilter)
+    .map(sp => Object.assign({ sp }, spotScore(sp, w)))
+    .sort((a, b) => b.s - a.s);
+
+  $('#spot-count').textContent = `· ${w.slot.label} 기준`;
+
+  if (w.risk) {
+    $('#spot-list').innerHTML =
+      `<div class="banner warn"><div class="banner-icon ms">block</div><div>
+        <strong>이 시간대 추천을 접었습니다</strong>
+        <p>안전이 우선입니다. 다른 시간대를 눌러 보세요.</p></div></div>`;
+  } else {
+    $('#spot-list').innerHTML = list.map(x => {
+      const sp = x.sp;
+      const rv = S.reviews[sp.id] || [];
+      const avg = rv.length ? (rv.reduce((t,r) => t+r.r, 0)/rv.length) : 0;
+      const cls = x.s >= 70 ? 'g' : x.s >= 45 ? 'y' : 'r';
+      return `<div class="spot" data-spot="${sp.id}">
+        <div class="spot-top">
+          <strong>${esc(sp.name)}</strong>
+          <span class="spot-badge ${cls}">${x.s}점</span>
+        </div>
+        <div class="spot-sub">${esc(sp.region)} · ${x.d.toFixed(1)}km · ${sp.type}
+          ${sp.night ? ' · 야간 가능' : ''}${sp.park ? ' · 주차' : ''}${sp.wc ? ' · 화장실' : ''}</div>
+        ${rv.length ? `<div class="spot-sub"><span class="stars">${'★'.repeat(Math.round(avg))}${'☆'.repeat(5-Math.round(avg))}</span> ${avg.toFixed(1)} (후기 ${rv.length})</div>` : ''}
+        <div class="spot-fish">${sp.fish.map(f => `<span class="tagx">${esc(f)}</span>`).join('')}</div>
+      </div>`;
+    }).join('');
+    $$('#spot-list .spot').forEach(el =>
+      el.onclick = () => openSpot(el.dataset.spot, w));
+  }
+  drawMap(list, w);
+}
+
+/* ══════════════════════════════════════════════════════════
+   F-2 지도 — Leaflet + OpenStreetMap
+   ----------------------------------------------------------
+   구글·네이버·카카오 지도는 API 키와 '등록된 도메인'을 요구한다.
+   이 앱은 file:// 로 여는 파일이라 도메인이 없어 키가 거부된다.
+   그래서 키 없이 쓸 수 있는 OpenStreetMap 타일을 쓴다.
+   지도는 한 번만 만들고, 이후에는 핀만 갈아 끼운다.
+   ══════════════════════════════════════════════════════════ */
+const MAP = { obj:null, tiles:null, pins:[], me:null, ready:false };
+
+/* OpenStreetMap 기본 타일 — 지명을 그 나라 말로 쓴다(한국이면 한글).
+   CARTO 타일은 깔끔하지만 'Buan-myeon'처럼 로마자로만 나와서 바꿨다.
+   어두운 화면일 때는 타일을 갈아 끼우지 않고 CSS로 색을 뒤집는다(아래 .leaflet-tile-pane). */
+const TILES = {
+  light: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  dark:  'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+};
+function isDarkNow() {
+  return (document.documentElement.getAttribute('data-theme')
+       || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+}
+
+function initMap() {
+  if (MAP.obj || typeof L === 'undefined') return MAP.obj;
+  MAP.obj = L.map('minimap', {
+    center: [LOC.lat, LOC.lon], zoom: 10,
+    /* 마우스 휠: 지도 위에서는 확대·축소, 지도 밖에서는 페이지가 그대로 스크롤된다.
+       (Leaflet이 지도 칸 안에서만 휠을 가로챈다) */
+    scrollWheelZoom: true,
+    zoomControl: true
+  });
+  MAP.tiles = L.tileLayer(TILES[isDarkNow() ? 'dark' : 'light'], {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap 기여자'
+  }).addTo(MAP.obj);
+  /* 사용자가 직접 끌거나 휠로 확대하면, 그 뒤로는 앱이 멋대로 화면을 되돌리지 않는다.
+     (날씨는 2분마다 새로 받아오는데, 그때마다 보던 자리로 튕기면 못 쓴다)
+     프로그램이 옮긴 경우(MAP.programmatic)는 '사용자가 움직인 것'으로 치지 않는다. */
+  MAP.obj.on('dragstart zoomstart', () => { if (!MAP.programmatic) MAP.userMoved = true; });
+
+  /* 처음 그릴 때는 지도 칸의 크기가 아직 확정되지 않아 확대가 엉뚱하게 잡힌다.
+     레이아웃이 끝난 뒤 '딱 한 번만' 다시 맞춘다.
+     ※ ResizeObserver로 계속 감시하면 invalidateSize와 서로를 부르며
+        지도가 혼자 확대·축소를 반복한다(실제로 겪음). 반드시 1회로 제한할 것. */
+  MAP.obj.whenReady(() => {
+    if (MAP.didFit) return;
+    MAP.didFit = true;
+    setTimeout(() => {
+      if (!MAP.userMoved && MAP.lastList) fitNear(MAP.lastList);
+    }, 350);
+  });
+
+  MAP.ready = true;
+  return MAP.obj;
+}
+
+/* 어두운/밝은 화면이 바뀌면 타일도 갈아 끼운다 */
+function refreshMapTiles() {
+  if (!MAP.tiles) return;
+  MAP.tiles.setUrl(TILES[isDarkNow() ? 'dark' : 'light']);
+}
+
+function dot(color, size) {
+  return L.divIcon({
+    className: '', iconSize: [size, size], iconAnchor: [size/2, size/2],
+    html: `<div class="pin-dot" style="width:${size}px;height:${size}px;background:${color}"></div>`
+  });
+}
+
+function drawMap(list, w) {
+  const map = initMap();
+  if (!map) return;                       /* 지도 라이브러리를 못 불러온 경우 */
+  MAP.lastList = list; MAP.lastW = w;     /* '내 위치로'·'전체 보기' 버튼이 쓴다 */
+
+  MAP.pins.forEach(p => map.removeLayer(p));
+  MAP.pins = [];
+
+  /* 내 위치 */
+  if (MAP.me) map.removeLayer(MAP.me);
+  MAP.me = L.marker([LOC.lat, LOC.lon], {
+    icon: L.divIcon({ className:'', iconSize:[16,16], iconAnchor:[8,8],
+                      html:'<div class="pin-me" style="width:16px;height:16px"></div>' }),
+    zIndexOffset: 1000
+  }).addTo(map).bindPopup('<b>내 위치</b><br>' + esc(LOC.name));
+  MAP.pins.push(MAP.me);
+
+  /* 스팟 핀 — 점수에 따라 초록/주황/빨강 */
+  list.forEach(x => {
+    const sp = x.sp;
+    const color = x.s >= 70 ? '#0f8a5f' : x.s >= 45 ? '#c77700' : '#c62828';
+    const m = L.marker([sp.lat, sp.lon], { icon: dot(color, x.s >= 70 ? 18 : 15) }).addTo(map);
+    m.bindPopup(
+      `<b>${esc(sp.name)}</b><br>${esc(sp.region)} · ${sp.type} · ${x.d.toFixed(1)}km<br>` +
+      `<span style="color:${color};font-weight:800">${w.slot.label} ${x.s}점</span> · ` +
+      `${sp.fish.slice(0,3).join(', ')}` +
+      `<br><span class="go" data-openspot="${sp.id}">자세히 보기 ▸</span>`
+    );
+    MAP.pins.push(m);
+  });
+
+  /* 팝업 안의 '자세히 보기' → 기존 스팟 상세 모달 */
+  map.off('popupopen').on('popupopen', e => {
+    const a = e.popup.getElement().querySelector('[data-openspot]');
+    if (a) a.onclick = () => { map.closePopup(); openSpot(a.dataset.openspot, w); };
+  });
+
+  /* 사용자가 지도를 만진 뒤에는 보던 자리를 지켜준다 */
+  if (!MAP.userMoved) fitNear(list);
+}
+
+/* 가까운 곳 위주로 화면을 맞춘다 — 18곳을 다 담으면 전국이 나와서 안 보인다.
+   ※ invalidateSize()를 fitBounds보다 '먼저' 불러야 한다. 순서를 바꾸면 지도가
+      옛 크기를 기준으로 범위를 잡아, 가까운 곳인데도 화면 밖으로 밀려난다. */
+function fitNear(list) {
+  const map = MAP.obj; if (!map) return;
+  const near = list.slice().sort((a,b) => a.d - b.d).slice(0, 6);
+  const pts = [[LOC.lat, LOC.lon]].concat(near.map(x => [x.sp.lat, x.sp.lon]));
+  MAP.programmatic = true;
+  map.invalidateSize();
+  if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.25), { animate:false });
+  else map.setView([LOC.lat, LOC.lon], 11, { animate:false });
+  MAP.programmatic = false;
+}
+function fitAll(list) {
+  const map = MAP.obj; if (!map || !list.length) return;
+  const pts = [[LOC.lat, LOC.lon]].concat(list.map(x => [x.sp.lat, x.sp.lon]));
+  MAP.programmatic = true;
+  map.invalidateSize();
+  map.fitBounds(L.latLngBounds(pts).pad(0.15));
+  setTimeout(() => { MAP.programmatic = false; }, 400);   /* 움직임이 끝난 뒤 해제 */
+}
+
+/* 지도 아래 두 버튼 — 누른 뒤에는 그 화면을 그대로 둔다 */
+$('#map-me').onclick  = () => { if (MAP.obj) { MAP.userMoved = true; MAP.obj.setView([LOC.lat, LOC.lon], 12); } };
+$('#map-all').onclick = () => { MAP.userMoved = true; fitAll(MAP.lastList || []); };
+
+/* F-2 상세 + F-3 후기 */
+function openSpot(id, w) {
+  const sp = SPOTS.find(x => x.id === id);
+  const sc = spotScore(sp, w);
+  const rv = S.reviews[sp.id] || [];
+  const avg = rv.length ? (rv.reduce((t,r) => t+r.r, 0)/rv.length) : 0;
+
+  modal(`
+    <h3>${esc(sp.name)}</h3>
+    <p class="msub">${esc(sp.region)} · ${sp.type} · ${sc.d.toFixed(1)}km</p>
+    <div class="banner ${sc.s>=70?'ok':sc.s>=45?'warn':'danger'}">
+      <div class="banner-icon ms">phishing</div><div>
+        <strong>${w.slot.label} ${sc.s}점</strong><p>${esc(sp.tip)}</p></div></div>
+    <div class="kv"><b>주 어종</b><span>${sp.fish.join(', ')}</span></div>
+    <div class="kv"><b>편의</b><span>${[sp.park?'주차':'', sp.wc?'화장실':'', sp.night?'야간 가능':'야간 불가', sp.fee].filter(Boolean).join(' · ')}</span></div>
+    <div class="kv"><b>후기</b><span>${rv.length ? `<span class="stars">${'★'.repeat(Math.round(avg))}</span> ${avg.toFixed(1)} · ${rv.length}건` : '아직 없음'}</span></div>
+
+    <h3 style="font-size:15px;margin-top:18px">조황 후기 남기기</h3>
+    <div class="row" style="align-items:center">
+      <select id="rv-star" style="flex:0 0 90px;padding:11px;border-radius:11px;border:1px solid var(--line);background:var(--bg)">
+        <option value="5">★★★★★</option><option value="4">★★★★</option>
+        <option value="3" selected>★★★</option><option value="2">★★</option><option value="1">★</option>
+      </select>
+      <input id="rv-txt" class="search-in" style="margin:0" placeholder="한 줄 (예: 초들물에 우럭 4수)" maxlength="40">
+    </div>
+    <button class="primary wide" id="rv-go">후기 올리기</button>
+    <div id="rv-list" style="margin-top:14px"></div>
+
+    <div class="dir-box">
+      <h3 style="font-size:15px;margin-bottom:2px">찾아가기</h3>
+      <p class="fine" style="margin:0 0 4px">${esc(sp.region)} · 여기서 ${sc.d.toFixed(1)}km</p>
+      <a class="dir-btn go" target="_blank" rel="noopener"
+         href="https://map.kakao.com/link/to/${encodeURIComponent(sp.name)},${sp.lat},${sp.lon}"><span class="ms">directions</span> 카카오맵으로 길찾기</a>
+      <a class="dir-btn sub" target="_blank" rel="noopener"
+         href="https://map.naver.com/p/search/${encodeURIComponent(sp.name)}">네이버지도에서 찾기</a>
+      <p class="fine" style="text-align:center;margin:8px 0 0">좌표 ${sp.lat.toFixed(5)}, ${sp.lon.toFixed(5)}</p>
+    </div>
+  `);
+
+  const paint = () => {
+    const r = S.reviews[sp.id] || [];
+    $('#rv-list').innerHTML = r.slice(0,3).map(x =>
+      `<div class="kv"><b>${daysAgo(x.at)}</b><span><span class="stars">${'★'.repeat(x.r)}</span> ${esc(x.txt)}</span></div>`
+    ).join('') || '<p class="fine">최근 후기가 없습니다.</p>';
+  };
+  paint();
+  $('#rv-go').onclick = () => {
+    const txt = $('#rv-txt').value.trim();
+    if (!txt) return toast('한 줄을 적어 주세요');
+    (S.reviews[sp.id] = S.reviews[sp.id] || []).unshift(
+      { r: +$('#rv-star').value, txt, at: new Date().toISOString() });
+    save(); paint(); $('#rv-txt').value = '';
+    toast('후기를 올렸습니다'); render1();
+  };
+}
+
+/* ══════════════════════════════════════════════════════════
+   5. 화면 2 — 기록  (R-2 / R-3)
+   ══════════════════════════════════════════════════════════ */
+function initCatch() {
+  $('#catch-spot').innerHTML = '<option value="">— 선택 안 함 —</option>' +
+    SPOTS.slice()
+      .sort((a,b) => km(LOC,a) - km(LOC,b))
+      .map(s => `<option value="${s.id}">${esc(s.name)} (${s.type}, ${km(LOC,s).toFixed(1)}km)</option>`)
+      .join('');
+  $('#ref-sel').innerHTML =
+    REFERENCES.map(r => `<option value="${r.id}">${esc(r.name)}${r.cm?` — ${r.cm}cm`:''}</option>`).join('') +
+    '<option value="none">사진에 기준물이 없어요</option>';
+}
+
+function resetCatch() {
+  draft = null;
+  ['#step-id','#step-size','#step-save'].forEach(s => $(s).classList.add('hide'));
+  $('#step-photo').classList.remove('hide');
+  $('#file').value = '';
+}
+
+/* ── 사진 넣기 ① 파일에서 고르기 ─────────────────── */
+$('#btn-file').onclick = () => $('#file').click();
+
+$('#file').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const img = new Image();
+  img.onload = () => onPhoto(img);
+  img.onerror = () => toast('사진을 읽지 못했습니다');
+  img.src = URL.createObjectURL(f);
+});
+
+/* ── 사진 넣기 ② 카메라로 찍기 ────────────────────
+   getUserMedia 는 http(s)에서만 열린다. 파일(file://)로 열면
+   권한을 붙여 둘 '출처'가 없어 브라우저가 바로 거부한다.
+   그래서 실패하면 이유를 정확히 알려주고 파일 고르기로 안내한다. */
+let camStream = null, camFacing = 'environment';
+
+async function openCam() {
+  const layer = $('#cam-layer'), err = $('#cam-err');
+  layer.classList.remove('hide');
+  err.classList.add('hide'); err.innerHTML = '';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return camError({ name: 'Unsupported' });
+  }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: camFacing, width: { ideal: 1280 }, height: { ideal: 960 } },
+      audio: false
+    });
+    $('#cam-video').srcObject = camStream;
+  } catch (e) { camError(e); }
+}
+
+function camError(e) {
+  const isFile = location.protocol === 'file:';
+  let msg;
+  if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
+    msg = isFile
+      ? '파일로 연 상태(file://)에서는 브라우저가 카메라를 막습니다. 「파일에서 고르기」를 쓰시거나, 웹 주소(https)로 열어 주세요.'
+      : '카메라 권한이 거부되었습니다. 주소창의 자물쇠 아이콘에서 카메라를 허용해 주세요.';
+  } else if (e.name === 'NotFoundError' || e.name === 'OverconstrainedError') {
+    msg = '쓸 수 있는 카메라를 찾지 못했습니다.';
+  } else if (e.name === 'NotReadableError') {
+    msg = '다른 프로그램이 카메라를 쓰고 있습니다. 그 프로그램을 닫고 다시 시도해 주세요.';
+  } else if (e.name === 'Unsupported') {
+    msg = '이 브라우저는 카메라 촬영을 지원하지 않습니다.';
+  } else {
+    msg = '카메라를 열지 못했습니다. (' + e.name + ')';
+  }
+  const err = $('#cam-err');
+  err.innerHTML = `<div class="banner-icon ms">videocam_off</div>
+    <div><strong>카메라를 쓸 수 없습니다</strong><p>${esc(msg)}</p></div>`;
+  err.classList.remove('hide');
+  $('#cam-shot').disabled = true;
+}
+
+function closeCam() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  $('#cam-video').srcObject = null;
+  $('#cam-layer').classList.add('hide');
+  $('#cam-shot').disabled = false;
+}
+
+function shootCam() {
+  const v = $('#cam-video');
+  if (!v.videoWidth) return toast('아직 화면이 준비되지 않았습니다');
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  const url = c.toDataURL('image/jpeg', 0.92);
+  closeCam();
+  const img = new Image();
+  img.onload = () => onPhoto(img);
+  img.onerror = () => toast('사진을 만들지 못했습니다');
+  img.src = url;
+}
+
+$('#btn-cam').onclick    = openCam;
+$('#cam-cancel').onclick = closeCam;
+$('#cam-shot').onclick   = shootCam;
+$('#cam-switch').onclick = async () => {              /* 휴대폰 앞뒤 카메라 전환 */
+  camFacing = camFacing === 'environment' ? 'user' : 'environment';
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  await openCam();
+};
+$('#cam-layer').addEventListener('click', e => { if (e.target.id === 'cam-layer') closeCam(); });
+
+function onPhoto(img) {
+  const spotId = $('#catch-spot').value;
+  const spot = SPOTS.find(s => s.id === spotId);
+  const feat = Vision.extract(img);
+
+  draft = {
+    img,
+    photo: Vision.thumbnail(img),
+    hash: Vision.hash(img),
+    spotId: spotId || null,
+    feat,
+    at: new Date().toISOString(),
+    weather: WX ? snapWeather() : null
+  };
+
+  $('#step-photo').classList.add('hide');
+  $('#step-id').classList.remove('hide');
+  $('#shot').src = draft.photo;
+
+  if (!feat.ok) {
+    $('#shot-meta').innerHTML = '사진에서 물고기 윤곽을 찾지 못했습니다.';
+    $('#id-note').innerHTML =
+      '배경과 물고기 색이 비슷하면 자동 판별이 어렵습니다. <b>목록에서 직접 찾기</b>로 골라 주세요.';
+    $('#cand-list').innerHTML = '';
+    openPicker();
+    return;
+  }
+
+  $('#shot-meta').innerHTML =
+    `색상 <code>${Math.round(feat.hue)}°</code> · 채도 <code>${feat.sat.toFixed(2)}</code> · ` +
+    `체형비 <code>${feat.ratio.toFixed(2)}</code><br>` +
+    (spot ? `${esc(spot.name)}(${spot.type})에서 잡은 것으로 보고 판별했습니다.`
+          : '스팟을 고르면 민물/바다 정보가 판별에 반영됩니다.');
+
+  const cands = Vision.identify(feat, { water: spot ? spot.type : null });
+  draft.cands = cands;
+  const top = cands[0];
+
+  /* S-2 확신도가 낮으면 자동 확정하지 않는다 */
+  if (top.confidence < 55) {
+    $('#id-note').innerHTML =
+      `가장 높은 후보도 확신도가 <b>${top.confidence}%</b>로 낮습니다. 자동으로 정하지 않겠습니다 — 아래에서 고르거나 직접 찾아 주세요.`;
+  } else {
+    $('#id-note').innerHTML =
+      '색·형태로 추정한 결과입니다. 실제 어종과 다르면 다른 후보나 직접 찾기를 눌러 주세요.';
+  }
+
+  $('#cand-list').innerHTML = cands.map((c, i) => `
+    <div class="cand ${i===0 && top.confidence>=55 ? 'top':''}" data-fish="${c.fish.id}">
+      <span class="em">${c.fish.emoji}</span>
+      <div class="info"><strong>${esc(c.fish.name)}</strong>
+        <small>${c.fish.water} · ${esc(c.fish.habitat)}</small></div>
+      <div class="conf"><b>${c.confidence}%</b>
+        <div class="conf-bar"><i style="width:${c.confidence}%"></i></div></div>
+    </div>`).join('');
+  $$('#cand-list .cand').forEach(el =>
+    el.onclick = () => pickFish(el.dataset.fish));
+}
+
+function snapWeather() {
+  const h = new Date().getHours();
+  const key = h >= 6 && h <= 11 ? 'am' : h >= 12 && h <= 17 ? 'pm' : 'night';
+  const w = WX.find(x => x && x.slot.day === 0 && x.slot.key === key) || WX[0];
+  return w ? { t:w.t, wind:w.wind, rain:w.rain, label:w.label, score:w.score } : null;
+}
+
+/* S-2 직접 찾기 */
+function openPicker() {
+  modal(`
+    <h3>어종 직접 찾기</h3>
+    <p class="msub">이름으로 검색하거나 아래 목록에서 고르세요.</p>
+    <input class="search-in" id="pk-q" placeholder="예: 붕어, 우럭…">
+    <div class="filter-row">
+      <button class="pill on" data-pk="all">전체</button>
+      <button class="pill" data-pk="민물">민물</button>
+      <button class="pill" data-pk="바다">바다</button>
+    </div>
+    <div id="pk-list"></div>`);
+
+  let wf = 'all';
+  const paint = () => {
+    const q = ($('#pk-q').value || '').trim();
+    $('#pk-list').innerHTML = FISH
+      .filter(f => (wf === 'all' || f.water === wf) && (!q || f.name.includes(q)))
+      .map(f => `<div class="pick" data-fish="${f.id}">
+          <span class="em">${f.emoji}</span>
+          <div><strong>${esc(f.name)}</strong><small>${f.water} · ${esc(f.season)}</small></div>
+        </div>`).join('') || '<p class="fine">검색 결과가 없습니다.</p>';
+    $$('#pk-list .pick').forEach(el => el.onclick = () => {
+      closeModal(); pickFish(el.dataset.fish);
+    });
+  };
+  $('#pk-q').oninput = paint;
+  $$('#modal [data-pk]').forEach(b => b.onclick = () => {
+    $$('#modal [data-pk]').forEach(x => x.classList.remove('on'));
+    b.classList.add('on'); wf = b.dataset.pk; paint();
+  });
+  paint();
+}
+$('#btn-manual').onclick = openPicker;
+
+/* ── 어종 확정 → 크기 재기 (F-5) ────────────────────────── */
+let M = { ref:[], fish:[], img:null };
+
+function pickFish(id) {
+  const f = fishById(id);
+  draft.fish = f;
+  $('#step-id').classList.add('hide');
+  $('#step-size').classList.remove('hide');
+  $('#measure-guide').innerHTML =
+    `<b>${f.emoji} ${esc(f.name)}</b>로 확정했습니다. 이제 길이를 잽니다 — ` +
+    `사진 속 <b>기준물의 양 끝</b>을 두 번, 그다음 <b>물고기의 주둥이와 꼬리 끝</b>을 두 번 탭하세요.`;
+  M = { ref:[], fish:[], img:draft.img };
+  $('#ref-sel').value = 'card';
+  $('#ref-cm').classList.add('hide');
+  $('#result-len').classList.add('hide');
+  $('#btn-to-save').classList.add('hide');
+  setupCanvas();
+}
+
+function setupCanvas() {
+  const cv = $('#mcanvas');
+  const img = M.img;
+  cv.width = 900;
+  cv.height = Math.round(900 * img.naturalHeight / img.naturalWidth);
+  drawMeasure();
+
+  cv.onpointerdown = ev => {
+    const r = cv.getBoundingClientRect();
+    const p = { x: (ev.clientX - r.left) / r.width, y: (ev.clientY - r.top) / r.height };
+    if (M.ref.length < 2) M.ref.push(p);
+    else if (M.fish.length < 2) M.fish.push(p);
+    else { M.ref = [p]; M.fish = []; }
+    drawMeasure(); updateMeasure();
+  };
+}
+
+function drawMeasure() {
+  const cv = $('#mcanvas'), cx = cv.getContext('2d');
+  cx.drawImage(M.img, 0, 0, cv.width, cv.height);
+  const line = (pts, color, label) => {
+    if (!pts.length) return;
+    cx.strokeStyle = color; cx.fillStyle = color; cx.lineWidth = 5;
+    pts.forEach(p => { cx.beginPath(); cx.arc(p.x*cv.width, p.y*cv.height, 9, 0, 7); cx.fill(); });
+    if (pts.length === 2) {
+      cx.beginPath();
+      cx.moveTo(pts[0].x*cv.width, pts[0].y*cv.height);
+      cx.lineTo(pts[1].x*cv.width, pts[1].y*cv.height);
+      cx.stroke();
+      cx.font = 'bold 30px sans-serif';
+      cx.strokeStyle = 'rgba(0,0,0,.6)'; cx.lineWidth = 6;
+      const mx = (pts[0].x+pts[1].x)/2*cv.width, my = (pts[0].y+pts[1].y)/2*cv.height - 16;
+      cx.strokeText(label, mx, my); cx.fillText(label, mx, my);
+    }
+  };
+  line(M.ref,  '#ffd400', '기준물');
+  line(M.fish, '#2ee6c8', '물고기');
+}
+
+function refCm() {
+  const id = $('#ref-sel').value;
+  if (id === 'custom') return parseFloat($('#ref-cm').value) || 0;
+  const r = REFERENCES.find(x => x.id === id);
+  return r ? r.cm : 0;
+}
+
+function updateMeasure() {
+  const st = $('#measure-status');
+  if (M.ref.length < 2) { st.textContent = `기준물의 양 끝을 탭하세요 (${M.ref.length}/2)`; return; }
+  if (M.fish.length < 2) { st.textContent = `물고기의 주둥이와 꼬리 끝을 탭하세요 (${M.fish.length}/2)`; return; }
+  const cm = refCm();
+  if (!cm) { st.textContent = '기준물의 실제 길이를 입력하세요.'; return; }
+  const r = Vision.measure(M.ref, M.fish, cm);
+  if (!r) { st.textContent = '기준물 두 점이 너무 가깝습니다. 다시 찍어 주세요.'; return; }
+  draft.len = r.cm; draft.err = r.err; draft.manualLen = false;
+  st.textContent = '점을 다시 탭하면 처음부터 다시 잽니다.';
+  $('#result-len').classList.remove('hide');
+  $('#result-len').innerHTML = `<b>약 ${r.cm}cm</b>측정 오차 ±${r.err}cm`;
+  $('#btn-to-save').classList.remove('hide');
+}
+
+$('#ref-sel').onchange = () => {
+  const v = $('#ref-sel').value;
+  $('#ref-cm').classList.toggle('hide', v !== 'custom');
+  if (v === 'none') showNoRefGuide();       /* S-3 */
+  else updateMeasure();
+};
+$('#ref-cm').oninput = updateMeasure;
+$('#btn-mreset').onclick = () => { M.ref = []; M.fish = []; drawMeasure(); updateMeasure();
+  $('#result-len').classList.add('hide'); $('#btn-to-save').classList.add('hide'); };
+$('#btn-manual-len').onclick = showNoRefGuide;
+
+/* S-3 기준물이 없을 때 */
+function showNoRefGuide() {
+  modal(`
+    <h3>기준물이 없으면 잴 수 없습니다</h3>
+    <p class="msub">사진 한 장만으로는 절대 크기를 알 수 없습니다. 크기를 아는 물건이 함께 찍혀야 합니다.</p>
+    <div class="banner info"><div class="banner-icon ms">straighten</div><div>
+      <strong>이렇게 찍어 주세요</strong>
+      <p>물고기를 바닥에 눕히고, <b>신용카드·500원 동전·30cm 자</b> 중 하나를 물고기 옆에 나란히 놓은 뒤
+         바로 위에서 촬영하세요. 비스듬히 찍으면 오차가 커집니다.</p></div></div>
+    <div class="kv"><b>신용카드</b><span>긴 변 8.56cm — 지갑에 늘 있어 가장 편합니다</span></div>
+    <div class="kv"><b>500원</b><span>지름 2.65cm — 작은 물고기에 적당합니다</span></div>
+    <div class="kv"><b>30cm 자</b><span>가장 정확합니다</span></div>
+    <h3 style="font-size:15px;margin-top:18px">그냥 직접 입력할게요</h3>
+    <div class="row" style="align-items:center">
+      <input id="len-in" class="search-in" style="margin:0" type="number" step="0.1" placeholder="길이 cm">
+      <button class="primary" id="len-go" style="flex:0 0 80px">입력</button>
+    </div>
+    <p class="fine">직접 입력한 기록은 도감에는 남지만, 사진 근거가 없어 <b>친구 랭킹 집계에서는 빠집니다</b>.</p>
+  `);
+  $('#len-go').onclick = () => {
+    const v = parseFloat($('#len-in').value);
+    if (!v || v <= 0) return toast('길이를 입력해 주세요');
+    draft.len = Math.round(v*10)/10; draft.err = null; draft.manualLen = true;
+    closeModal();
+    $('#result-len').classList.remove('hide');
+    $('#result-len').innerHTML = `<b>${draft.len}cm</b>직접 입력 (랭킹 집계 제외)`;
+    $('#btn-to-save').classList.remove('hide');
+  };
+}
+
+/* ── 판정 + 저장 (F-6/F-7/F-8/F-9) ─────────────────────── */
+$('#btn-to-save').onclick = () => {
+  $('#step-size').classList.add('hide');
+  $('#step-save').classList.remove('hide');
+
+  const f = draft.fish;
+  const vs = judge(f, draft.len, draft.at);
+  draft.verdicts = vs;
+
+  $('#verdicts').innerHTML = vs.map(v => `
+    <div class="verdict v-${v.lv}">
+      <span class="vi ms">${v.icon}</span>
+      <div><strong>${esc(v.title)}</strong><p>${esc(v.body)}</p>
+        <span class="src">${esc(v.src)}</span></div>
+    </div>`).join('');
+
+  const spot = SPOTS.find(s => s.id === draft.spotId);
+  $('#sv-fish').textContent = `${f.emoji} ${f.name}`;
+  $('#sv-len').textContent  = draft.len
+    ? `${draft.len}cm${draft.err ? ` (±${draft.err})` : ' (직접 입력)'}` : '미측정';
+  $('#sv-at').textContent   = fmtDate(draft.at);
+  $('#sv-place').textContent = spot ? `${spot.name} · ${spot.region}` : '기록 안 함';
+  $('#sv-weather').textContent = draft.weather
+    ? `${draft.weather.t}° · 바람 ${draft.weather.wind}m/s · 지수 ${draft.weather.score}점` : '—';
+  $('#sv-privacy').value = S.privacy;
+
+  const forced = vs.some(v => v.force === 'release');
+  $('#sv-released').checked = forced;
+  $('#sv-released').disabled = forced;
+  if (forced) toast('방생 대상입니다 — 방생으로 고정했습니다', 3200);
+};
+
+$('#btn-cancel').onclick = resetCatch;
+
+$('#btn-save').onclick = () => {
+  const f = draft.fish;
+  const protectedOne = draft.verdicts.some(v => v.force === 'release' && v.kind === 'protected');
+  const rec = {
+    id: 'c' + Date.now(),
+    fishId: f.id,
+    len: draft.len || null,
+    err: draft.err,
+    manualLen: !!draft.manualLen,
+    at: draft.at,
+    spotId: draft.spotId,
+    weather: draft.weather,
+    method: $('#sv-method').value,
+    privacy: $('#sv-privacy').value,
+    released: $('#sv-released').checked,
+    kind: protectedOne ? '관찰' : '포획',
+    photo: draft.photo,
+    hash: draft.hash
+  };
+  S.catches.unshift(rec);
+  const got = checkBadges();
+  save();
+  resetCatch();
+  go('s-dex');
+  toast(got.length ? `기록 완료! 새 배지 ‘${got[0].name}’ 획득!` : '도감에 기록했습니다');
+};
+
+/* ══════════════════════════════════════════════════════════
+   6. 화면 3 — 도감  (F-10 / F-11 / F-12)
+   ══════════════════════════════════════════════════════════ */
+function checkBadges() {
+  const got = [];
+  BADGES.forEach(b => {
+    if (S.badges.indexOf(b.id) === -1 && b.check(S)) { S.badges.push(b.id); got.push(b); }
+  });
+  return got;
+}
+
+function myBest(fishId) {
+  const rs = S.catches.filter(c => c.fishId === fishId && c.len);
+  return rs.length ? Math.max.apply(null, rs.map(c => c.len)) : 0;
+}
+
+function render3() {
+  const caught = new Set(S.catches.map(c => c.fishId));
+  $('#dex-count').textContent = `${caught.size}종 수집`;
+  $('#dex-total').textContent = `전체 ${FISH.length}종`;
+  $('#dex-fill').style.width = (caught.size / FISH.length * 100) + '%';
+
+  /* F-12 주간 챌린지 */
+  const ch = CHALLENGES[isoWeek(new Date()) % CHALLENGES.length];
+  const ws = weekStart(new Date());
+  const wk = S.catches.filter(c => new Date(c.at) >= ws);
+  let done = 0;
+  if (ch.kind === 'newSpecies') {
+    const before = new Set(S.catches.filter(c => new Date(c.at) < ws).map(c => c.fishId));
+    done = new Set(wk.map(c => c.fishId).filter(x => !before.has(x))).size;
+  } else if (ch.kind === 'spots') {
+    done = new Set(wk.map(c => c.spotId).filter(Boolean)).size;
+  } else {
+    done = wk.filter(ch.match).length;
+  }
+  const ok = done >= ch.goal;
+  $('#challenge-card').innerHTML = `
+    <div class="ch-top"><span class="ci">${ch.icon}</span>
+      <strong>이번 주 챌린지 — ${esc(ch.title)}</strong>
+      <span class="${ok?'ch-done':''}">${ok ? '달성 ✓' : `<em>${done}</em>/${ch.goal}`}</span></div>
+    <div class="pg-bar" style="margin-top:9px"><div style="width:${Math.min(100, done/ch.goal*100)}%"></div></div>`;
+
+  /* 배지 */
+  $('#badge-row').innerHTML = BADGES.map(b => {
+    const got = S.badges.indexOf(b.id) !== -1;
+    return `<div class="badge ${got?'got':''}" title="${esc(b.desc)}">
+      <span class="bi">${b.icon}</span><small>${esc(b.name)}</small></div>`;
+  }).join('');
+
+  /* F-10 도감 격자 */
+  $('#dex-grid').innerHTML = FISH
+    .filter(f => dexFilter === 'all' ? true
+              : dexFilter === 'got' ? caught.has(f.id) : f.water === dexFilter)
+    .map(f => {
+      const got = caught.has(f.id);
+      const best = myBest(f.id);
+      const pin = f.grade === 'protected' ? '<span class=\"ms\">shield</span>' : f.grade === 'invasive' ? '<span class=\"ms\">warning</span>' : '';
+      return `<div class="dex ${got?'got':''}" data-fish="${f.id}">
+        ${pin ? `<span class="pin">${pin}</span>` : ''}
+        <span class="de">${f.emoji}</span>
+        <strong>${got ? esc(f.name) : '???'}</strong>
+        ${got ? `<small>${best ? best + 'cm' : '크기 미기록'}</small>`
+              : `<small class="lock">${f.water}</small>`}
+      </div>`;
+    }).join('');
+  $$('#dex-grid .dex').forEach(el => el.onclick = () => openFish(el.dataset.fish));
+
+  /* 내 기록 */
+  $('#log-list').innerHTML = S.catches.length ? S.catches.map(c => {
+    const f = fishById(c.fishId);
+    const sp = SPOTS.find(s => s.id === c.spotId);
+    return `<div class="log">
+      ${c.photo ? `<img src="${c.photo}" alt="">` : `<div class="log-noimg" style="width:56px;height:56px;display:flex;align-items:center;justify-content:center;font-size:26px">${f.emoji}</div>`}
+      <div class="li"><strong>${f.emoji} ${esc(f.name)} ${c.len ? c.len + 'cm' : ''}</strong>
+        <small>${daysAgo(c.at)} · ${sp ? esc(sp.name) : '장소 없음'} · ${c.kind}${c.released ? ' · 방생' : ''}</small></div>
+      <div class="lb">
+        <button class="mini" data-share="${c.id}">공유</button>
+        <button class="mini" data-del="${c.id}">삭제</button>
+      </div></div>`;
+  }).join('') : '<p class="fine">아직 기록이 없습니다. [기록] 탭에서 사진을 올려 보세요.</p>';
+
+  $$('#log-list [data-share]').forEach(b => b.onclick = () => shareCard(b.dataset.share));
+  $$('#log-list [data-del]').forEach(b => b.onclick = () => {
+    S.catches = S.catches.filter(c => c.id !== b.dataset.del);
+    save(); render3(); toast('기록을 지웠습니다');
+  });
+}
+
+/* F-11 어종 상세 */
+function openFish(id) {
+  const f = fishById(id);
+  const R = reg(f);
+  const mine = S.catches.filter(c => c.fishId === id);
+  const best = myBest(id);
+
+  const badge = R.grade === 'protected'
+    ? `<div class="verdict v-bad"><span class="vi ms">shield</span><div><strong>포획 금지 보호종</strong><p>${esc(f.note)}</p></div></div>`
+    : R.grade === 'invasive'
+    ? `<div class="verdict v-warn"><span class="vi ms">warning</span><div><strong>생태계교란 생물</strong><p>살아있는 채로 방류·이동이 금지됩니다.</p></div></div>` : '';
+
+  modal(`
+    <h3>${f.emoji} ${esc(f.name)}</h3>
+    <p class="msub">${f.water} · ${esc(f.life)}</p>
+    ${badge}
+    <div class="kv"><b>서식지</b><span>${esc(f.habitat)}</span></div>
+    <div class="kv"><b>제철</b><span>${esc(f.season)}</span></div>
+    <div class="kv"><b>평균/대물</b><span>${f.avg}cm / ${f.big}cm 이상이면 대물</span></div>
+    <div class="kv"><b>미끼·기법</b><span>${f.bait.join(', ')}</span></div>
+    <div class="kv"><b>금어기</b><span>${R.ban ? banText(R.ban) : '없음'}</span></div>
+    <div class="kv"><b>금지체장</b><span>${R.minLen != null ? R.minLen + 'cm (' + R.lenType + ')' : (R.minAnal ? R.minAnal + 'cm (항문장)' : '없음')}</span></div>
+    <div class="kv"><b>섭취</b><span>${f.water === '민물' && f.para ? '⚠️ 생식 금지 — 간흡충 위험, 반드시 익혀서' : f.edible ? '식용 가능' : '식용 대상 아님'}</span></div>
+    <div class="kv"><b>메모</b><span>${esc(f.note)}</span></div>
+    <p class="fine" style="margin-top:10px">규정 기준일 ${R.date}${R.edited ? ' · 운영자 수정본' : ''} · ${esc(REG_META.notice)}</p>
+
+    <h3 style="font-size:15px;margin-top:18px">내 기록</h3>
+    ${mine.length
+      ? `<div class="kv"><b>최고 기록</b><span>${best ? best + 'cm' : '크기 미기록'}</span></div>
+         <div class="kv"><b>포획 횟수</b><span>${mine.length}회 · 최근 ${daysAgo(mine[0].at)}</span></div>`
+      : '<p class="fine">아직 잡지 못했습니다. 다음 목표로!</p>'}
+  `);
+}
+
+/* ══════════════════════════════════════════════════════════
+   7. 화면 4 — 친구  (F-13 / F-14 / F-15 / S-5)
+   ══════════════════════════════════════════════════════════ */
+function myCode() {
+  if (!S.code) {
+    const A = 'ABCDEFGHJKMNPQRSTUVWXYZ', N = '23456789';
+    const p = n => Array.from({length:n}, () => A[Math.floor(Math.random()*A.length)]).join('');
+    const d = n => Array.from({length:n}, () => N[Math.floor(Math.random()*N.length)]).join('');
+    S.code = p(2) + d(2) + '-' + p(2) + d(2);
+    save();
+  }
+  return S.code;
+}
+
+/* 코드에서 결정적으로 만들어 내는 데모 친구 */
+function seedFrom(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function rng(seed) {
+  let a = seed;
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+/* 데모용 사진 지문 — Vision.hash() 와 같은 16자리 16진수 형태로 만든다 */
+function fakeHash(r) {
+  let s = '';
+  for (let i = 0; i < 16; i++) s += Math.floor(r() * 16).toString(16);
+  return s;
+}
+function makeFriend(code) {
+  const r = rng(seedFrom(code));
+  const NICK = ['물때형','붕어사냥꾼','새벽출조','릴감는사람','민물왕','파도소리',
+                '캐스팅킹','손맛중독','방파제터줏대감','초보탈출'];
+  const pool = FISH.filter(f => !f.grade);
+  const n = 4 + Math.floor(r()*6);
+  const cs = [];
+  for (let i = 0; i < n; i++) {
+    const f = pool[Math.floor(r()*pool.length)];
+    const len = Math.round((f.avg * (0.7 + r()*0.85)) * 10) / 10;
+    const sp = SPOTS.filter(s => s.type === f.water)[0] || SPOTS[0];
+    cs.push({
+      id: 'f' + code + i,
+      fishId: f.id,
+      len,
+      at: new Date(Date.now() - Math.floor(r()*26)*86400000 - Math.floor(r()*12)*3600000).toISOString(),
+      spotId: sp.id,
+      manualLen: r() < 0.15,        /* 일부는 사진 근거가 없는 기록 */
+      photo: null,
+      hash: fakeHash(r),
+      released: r() < 0.3,
+      kind: '포획'
+    });
+  }
+  cs.sort((a,b) => new Date(b.at) - new Date(a.at));
+  return { code, nick: NICK[Math.floor(r()*NICK.length)] + (Math.floor(r()*90)+10), catches: cs };
+}
+
+/* S-5 랭킹 집계에 넣을 기록만 걸러낸다 */
+function eligible(list) {
+  const seen = [];
+  const out = [], dropped = [];
+  list.forEach(c => {
+    if (c.manualLen || (!c.photo && !c.hash)) { dropped.push({ c, why:'사진 근거 없음' }); return; }
+    if (!c.len) { dropped.push({ c, why:'크기 미측정' }); return; }
+    if (c.err != null && c.len && c.err / c.len > 0.2) { dropped.push({ c, why:'측정 오차 과다' }); return; }
+    if (seen.some(h => Vision.hashClose(h, c.hash))) { dropped.push({ c, why:'같은 사진 중복' }); return; }
+    seen.push(c.hash); out.push(c);
+  });
+  return { out, dropped };
+}
+function thisMonth(c) {
+  const d = new Date(c.at), n = new Date();
+  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth();
+}
+
+function render4() {
+  $('#my-code').textContent = myCode();
+
+  /* F-13 수락 대기 */
+  $('#pending-box').innerHTML = S.pending.length ? S.pending.map(p => `
+    <div class="banner info"><div class="banner-icon">⏳</div><div>
+      <strong>${esc(p)} — 수락 대기 중</strong>
+      <p>상대가 수락하면 연결됩니다. 서버 없는 데모라서, 아래 버튼으로 수락을 흉내 낼 수 있습니다.</p>
+      <button class="mini" data-accept="${esc(p)}" style="margin-top:6px">데모: 상대가 수락함</button>
+    </div></div>`).join('') : '';
+  $$('#pending-box [data-accept]').forEach(b => b.onclick = () => {
+    const code = b.dataset.accept;
+    S.pending = S.pending.filter(x => x !== code);
+    S.friends.push(makeFriend(code));
+    checkBadges(); save(); render4();
+    toast('친구가 연결되었습니다');
+  });
+
+  /* F-15 랭킹 */
+  const me = { code: myCode(), nick: S.nick + ' (나)', catches: S.catches, me: true };
+  const rows = [me].concat(S.friends).map(p => {
+    const mine = p.catches.filter(thisMonth);
+    const e = eligible(mine);
+    const best = e.out.reduce((t,c) => Math.max(t, c.len || 0), 0);
+    const sp = new Set(e.out.map(c => c.fishId)).size;
+    return { p, best, sp, dropped: e.dropped.length, counted: e.out.length };
+  });
+  rows.sort((a,b) => rankMode === 'len' ? b.best - a.best : b.sp - a.sp);
+
+  $('#rank-list').innerHTML = rows.map((r, i) => `
+    <div class="rank ${r.p.me?'me':''} ${i===0?'gold':''}">
+      <span class="no">${i<3 ? `<span class="ms fill medal m${i}">workspace_premium</span>` : i+1}</span>
+      <div class="rn"><strong>${esc(r.p.nick)}</strong>
+        <small>이번 달 집계 ${r.counted}건${r.p.me && r.dropped ? ` · 제외 ${r.dropped}건` : ''}</small></div>
+      <span class="rv">${rankMode === 'len' ? (r.best ? r.best + 'cm' : '—') : r.sp + '종'}</span>
+    </div>`).join('');
+
+  const mine = eligible(S.catches.filter(thisMonth));
+  $('#rank-note').innerHTML = mine.dropped.length
+    ? '내 기록 중 ' + mine.dropped.map(d =>
+        `<b>${esc(fishById(d.c.fishId).name)}</b>(${esc(d.why)})`).join(', ') +
+      ' 은(는) 랭킹에서 빠졌습니다. 도감에는 그대로 남아 있고, 이 안내는 나에게만 보입니다.'
+    : '사진 근거가 있고 중복이 아닌 기록만 랭킹에 집계됩니다.';
+
+  /* 친구 피드 */
+  const feed = [];
+  S.friends.forEach(f => f.catches.slice(0,3).forEach(c => feed.push({ f, c })));
+  S.catches.filter(c => c.privacy !== 'private').slice(0,3)
+    .forEach(c => feed.push({ f:{ nick:S.nick + ' (나)' }, c }));
+  feed.sort((a,b) => new Date(b.c.at) - new Date(a.c.at));
+
+  $('#feed-list').innerHTML = feed.length ? feed.slice(0,12).map(x => {
+    const f = fishById(x.c.fishId), sp = SPOTS.find(s => s.id === x.c.spotId);
+    const liked = !!S.likes[x.c.id];
+    return `<div class="feed">
+      <div class="feed-top"><b>${esc(x.f.nick)}</b> · ${daysAgo(x.c.at)}
+        ${sp ? '· ' + esc(sp.name) : ''}</div>
+      <div class="feed-body">
+        ${x.c.photo ? `<img src="${x.c.photo}" alt="">`
+                    : `<div style="width:70px;height:70px;display:flex;align-items:center;justify-content:center;font-size:34px;background:var(--bg);border-radius:11px">${f.emoji}</div>`}
+        <div><strong>${esc(f.name)} ${x.c.len ? x.c.len + 'cm' : ''}</strong>
+          <div class="fine">${x.c.released ? '방생했습니다' : f.water + ' 어종'}</div>
+          <button class="like ${liked?'on':''}" data-like="${x.c.id}">${liked?'❤️':'🤍'}<span class="ms">favorite</span> 좋아요</button>
+        </div></div></div>`;
+  }).join('') : '<p class="fine">친구를 추가하면 서로의 조과가 여기에 보입니다.</p>';
+
+  $$('#feed-list [data-like]').forEach(b => b.onclick = () => {
+    const id = b.dataset.like;
+    S.likes[id] = !S.likes[id]; save(); render4();
+  });
+}
+
+$('#btn-add-friend').onclick = () => {
+  const v = $('#code-input').value.trim().toUpperCase();
+  const msg = $('#friend-msg');
+  msg.classList.remove('hide');
+  if (!/^[A-Z]{2}\d{2}-[A-Z]{2}\d{2}$/.test(v)) {
+    msg.textContent = '코드 형식이 맞지 않습니다. 예: AB12-CD34'; return;
+  }
+  if (v === myCode()) { msg.textContent = '내 코드입니다.'; return; }
+  if (S.friends.some(f => f.code === v)) { msg.textContent = '이미 연결된 친구입니다.'; return; }
+  if (S.pending.indexOf(v) !== -1) { msg.textContent = '이미 요청을 보냈습니다.'; return; }
+  S.pending.push(v); save();
+  msg.textContent = '요청을 보냈습니다. 상대가 수락하면 연결됩니다.';
+  $('#code-input').value = '';
+  render4();
+};
+
+/* F-14 공유 카드 */
+function shareCard(id) {
+  const c = S.catches.find(x => x.id === id);
+  const f = fishById(c.fishId);
+  const sp = SPOTS.find(s => s.id === c.spotId);
+  const cv = document.createElement('canvas');
+  cv.width = 720; cv.height = 960;
+  const cx = cv.getContext('2d');
+
+  const g = cx.createLinearGradient(0,0,0,960);
+  g.addColorStop(0,'#0b4f6c'); g.addColorStop(1,'#083a50');
+  cx.fillStyle = g; cx.fillRect(0,0,720,960);
+
+  const draw = () => {
+    cx.fillStyle = '#fff';
+    cx.font = 'bold 46px sans-serif'; cx.textAlign = 'left';
+    cx.fillText(`${f.emoji} ${f.name}`, 48, 700);
+    cx.font = 'bold 96px sans-serif';
+    cx.fillText(c.len ? c.len + 'cm' : '기록', 48, 800);
+    cx.font = '26px sans-serif'; cx.fillStyle = 'rgba(255,255,255,.82)';
+    const place = c.privacy === 'private' ? '장소 비공개'
+                : sp ? (c.privacy === 'friends' ? sp.name + ' · ' + sp.region : sp.region) : '장소 없음';
+    cx.fillText(`${fmtDate(c.at)} · ${place}`, 48, 848);
+    cx.fillText(`${S.nick} · ${c.released ? '방생' : c.kind}`, 48, 888);
+    cx.font = '22px sans-serif'; cx.fillStyle = 'rgba(255,255,255,.5)';
+    cx.fillText('낚시 민족', 48, 930);
+
+    const url = cv.toDataURL('image/jpeg', 0.9);
+    modal(`
+      <h3>조과 공유 카드</h3>
+      <p class="msub">이미지로 저장해 친구에게 보내거나 피드에 올릴 수 있습니다.</p>
+      <img id="share-canvas" src="${url}" alt="공유 카드">
+      <button class="primary wide" id="sh-save">이미지 저장</button>
+      <button class="ghost wide" id="sh-send">기기 공유하기</button>
+      <p class="fine">위치 공개 설정(${esc(c.privacy)})에 따라 장소 표기 범위가 달라집니다.</p>`);
+
+    $('#sh-save').onclick = () => {
+      const a = document.createElement('a');
+      a.href = url; a.download = `조과_${f.name}_${c.len||''}cm.jpg`; a.click();
+      toast('이미지를 저장했습니다');
+    };
+    $('#sh-send').onclick = async () => {
+      try {
+        const blob = await (await fetch(url)).blob();
+        const file = new File([blob], 'catch.jpg', { type:'image/jpeg' });
+        if (navigator.canShare && navigator.canShare({ files:[file] })) {
+          await navigator.share({ files:[file], title:`${f.name} ${c.len||''}cm` });
+        } else toast('이 기기에서는 바로 공유가 안 됩니다. 저장 후 보내 주세요');
+      } catch (e) { /* 사용자가 취소 */ }
+    };
+  };
+
+  if (c.photo) {
+    const im = new Image();
+    im.onload = () => {
+      const side = Math.min(im.width, im.height);
+      cx.drawImage(im, (im.width-side)/2, (im.height-side)/2, side, side, 0, 0, 720, 620);
+      const sh = cx.createLinearGradient(0,420,0,660);
+      sh.addColorStop(0,'rgba(8,58,80,0)'); sh.addColorStop(1,'rgba(8,58,80,1)');
+      cx.fillStyle = sh; cx.fillRect(0,420,720,240);
+      draw();
+    };
+    im.src = c.photo;
+  } else {
+    cx.font = '260px sans-serif'; cx.textAlign = 'center';
+    cx.fillText(f.emoji, 360, 420);
+    draw();
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   8. 화면 5 — 설정 (S-4 운영자 규정 편집 포함)
+   ══════════════════════════════════════════════════════════ */
+function render5() {
+  $('#set-nick').value = S.nick;
+  $('#set-privacy').value = S.privacy;
+  $('#reg-meta').innerHTML =
+    `${esc(REG_META.source)}<br>기준일 <b>${REG_META.baseDate}</b> · 수정된 어종 ${Object.keys(S.regOverride).length}건<br>${esc(REG_META.notice)}`;
+  $('#admin-fish').innerHTML = FISH.map(f =>
+    `<option value="${f.id}">${esc(f.name)}${S.regOverride[f.id] ? ' ✎' : ''}</option>`).join('');
+  fillAdmin();
+}
+function fillAdmin() {
+  const f = fishById($('#admin-fish').value);
+  if (!f) return;
+  const R = reg(f);
+  $('#admin-from').value  = R.ban ? R.ban.from : '';
+  $('#admin-to').value    = R.ban ? R.ban.to : '';
+  $('#admin-min').value   = R.minLen != null ? R.minLen : '';
+  $('#admin-grade').value = R.grade || '';
+  $('#admin-date').value  = R.date;
+}
+$('#set-nick').onchange = e => { S.nick = e.target.value.trim() || '나'; save(); render4(); };
+$('#set-privacy').onchange = e => { S.privacy = e.target.value; save(); };
+$('#btn-admin').onclick = () => $('#admin-panel').classList.toggle('hide');
+$('#admin-fish').onchange = fillAdmin;
+$('#btn-admin-save').onclick = () => {
+  const id = $('#admin-fish').value;
+  const from = $('#admin-from').value.trim(), to = $('#admin-to').value.trim();
+  const re = /^\d{2}-\d{2}$/;
+  if ((from || to) && !(re.test(from) && re.test(to)))
+    return toast('금어기는 MM-DD 형식으로 둘 다 입력하세요');
+  const min = $('#admin-min').value;
+  S.regOverride[id] = {
+    ban: from && to ? { from, to } : null,
+    minLen: min === '' ? null : parseFloat(min),
+    grade: $('#admin-grade').value || null,
+    date: $('#admin-date').value.trim() || REG_META.baseDate
+  };
+  save(); render5();
+  toast(`${fishById(id).name} 규정을 저장했습니다`);
+};
+$('#btn-admin-reset').onclick = () => {
+  if (!confirm('운영자 수정본을 모두 지우고 기본 규정으로 되돌릴까요?')) return;
+  S.regOverride = {}; save(); render5(); toast('기본 규정으로 되돌렸습니다');
+};
+$('#btn-wipe').onclick = () => {
+  if (!confirm('기록·도감·친구를 모두 지웁니다. 되돌릴 수 없습니다. 계속할까요?')) return;
+  localStorage.removeItem(KEY); S = load(); save();
+  render3(); render4(); render5(); toast('모두 지웠습니다');
+};
+
+/* 데모 기록 채우기 — 처음 열었을 때 화면이 비어 보이지 않게 */
+$('#btn-demo').onclick = () => {
+  const r = rng(20260729);
+  const pool = FISH.filter(f => !f.grade);
+  for (let i = 0; i < 7; i++) {
+    const f = pool[Math.floor(r()*pool.length)];
+    const len = Math.round(f.avg * (0.75 + r()*0.8) * 10)/10;
+    const sp = SPOTS.filter(s => s.type === f.water)[Math.floor(r()*3)] || SPOTS[0];
+    S.catches.push({
+      id:'d'+Date.now()+i, fishId:f.id, len, err:1.2, manualLen:false,
+      at:new Date(Date.now() - Math.floor(r()*20)*86400000).toISOString(),
+      spotId:sp.id, weather:{t:18,wind:3.2,rain:0,score:72,label:'좋음'},
+      method:'루어', privacy:'spot',
+      released: r()<0.4, kind:'포획', photo:null, hash:fakeHash(r)
+    });
+  }
+  S.catches.sort((a,b) => new Date(b.at) - new Date(a.at));
+  if (!S.friends.length) { S.friends.push(makeFriend('AB12-CD34')); S.friends.push(makeFriend('XY78-QR56')); }
+  checkBadges(); save(); render3(); render4();
+  go('s-dex'); toast('데모 기록을 채웠습니다');
+};
+
+/* ══════════════════════════════════════════════════════════
+   9. 공통 UI
+   ══════════════════════════════════════════════════════════ */
+function modal(html) {
+  $('#modal-body').innerHTML = html;
+  $('#modal').classList.remove('hide');
+}
+function closeModal() { $('#modal').classList.add('hide'); }
+$('#modal-x').onclick = closeModal;
+$('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
+
+function go(id) {
+  $$('.screen').forEach(s => s.classList.toggle('on', s.id === id));
+  $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.go === id));
+  window.scrollTo(0,0);
+  if (id === 's-dex') render3();
+  if (id === 's-friends') render4();
+  if (id === 's-settings') render5();
+  if (id === 's-catch') initCatch();
+  /* 숨어 있는 동안 지도는 크기를 0으로 알고 있다 — 돌아오면 다시 알려준다 */
+  if (id === 's-today' && MAP.obj) setTimeout(() => MAP.obj.invalidateSize(), 60);
+}
+$$('.tab').forEach(t => t.onclick = () => go(t.dataset.go));
+
+$$('[data-water]').forEach(b => b.onclick = () => {
+  $$('[data-water]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); spotFilter = b.dataset.water; render1();
+});
+$$('[data-dex]').forEach(b => b.onclick = () => {
+  $$('[data-dex]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); dexFilter = b.dataset.dex; render3();
+});
+$$('[data-rank]').forEach(b => b.onclick = () => {
+  $$('[data-rank]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); rankMode = b.dataset.rank; render4();
+});
+
+/* ══════════════════════════════════════════════════════════
+   10. 시작
+   ══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   내 위치
+   ----------------------------------------------------------
+   · 브라우저 위치 기능은 http(s)로 열었을 때만 제대로 동작한다.
+     파일(file://)로 열면 권한을 붙여 둘 '출처'가 없어서 브라우저가
+     묻지도 않고 거부한다. 그래서 직접 고르는 길을 함께 둔다.
+   · 한 번 정한 위치는 저장해 두고 다음에도 그대로 쓴다.
+   ══════════════════════════════════════════════════════════ */
+const LOC_KEY = 'nm.loc';
+
+/* 직접 고를 수 있는 지역 (위경도는 시·군청 기준) */
+const REGIONS = [
+  { name:'고창읍',   lat:35.4356, lon:126.7019 },
+  { name:'부안읍',   lat:35.7317, lon:126.7330 },
+  { name:'정읍시',   lat:35.5699, lon:126.8560 },
+  { name:'전주시',   lat:35.8242, lon:127.1480 },
+  { name:'광주광역시', lat:35.1595, lon:126.8526 },
+  { name:'목포시',   lat:34.8118, lon:126.3922 },
+  { name:'대전시',   lat:36.3504, lon:127.3845 },
+  { name:'수원시',   lat:37.2636, lon:127.0286 },
+  { name:'인천시',   lat:37.4563, lon:126.7052 },
+  { name:'서울시',   lat:37.5665, lon:126.9780 },
+  { name:'부산시',   lat:35.1796, lon:129.0756 }
+];
+
+/* 위치를 정하고 화면 전체를 다시 계산한다 */
+function setLoc(lat, lon, name) {
+  LOC = { lat, lon, name };
+  try { localStorage.setItem(LOC_KEY, JSON.stringify(LOC)); } catch (e) {}
+  MAP.userMoved = false;                 /* 위치가 바뀌었으니 지도는 다시 맞춰도 된다 */
+  loadWeather(); initCatch();
+  toast('내 위치를 ' + name + ' 으로 정했습니다');
+}
+
+function locate(byUser) {
+  if (!navigator.geolocation) {
+    toast('이 기기는 위치 기능을 지원하지 않습니다');
+    if (byUser) openLocModal('이 기기는 위치 기능을 지원하지 않습니다.');
+    return;
+  }
+  $('#top-sub').textContent = '내 위치를 잡는 중…';
+  navigator.geolocation.getCurrentPosition(
+    p => setLoc(p.coords.latitude, p.coords.longitude, '내 위치'),
+    err => {
+      const isFile = location.protocol === 'file:';
+      let msg;
+      if (err.code === 1) {
+        msg = isFile
+          ? '파일로 연 상태(file://)에서는 브라우저가 위치 확인을 막습니다. 아래에서 직접 골라 주세요.'
+          : '위치 권한이 거부되었습니다. 주소창의 자물쇠 아이콘에서 위치를 허용해 주세요.';
+      } else if (err.code === 2) {
+        msg = '지금은 위치를 확인할 수 없습니다. 잠시 뒤 다시 시도해 주세요.';
+      } else {
+        msg = '위치를 잡는 데 시간이 너무 오래 걸립니다.';
+      }
+      $('#top-sub').textContent = LOC.name + ' 기준';
+      toast(msg, 5000);
+      if (byUser) openLocModal(msg);
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+  );
+}
+
+/* 지도를 눌러서 내 위치를 찍는다 — 파일로 열었을 때 가장 확실한 방법 */
+function pickOnMap() {
+  if (!MAP.obj) return toast('지도가 아직 준비되지 않았습니다');
+  closeModal();
+  go('s-today');
+  const el = document.getElementById('minimap');
+  el.scrollIntoView({ block: 'center' });
+  el.style.cursor = 'crosshair';
+  toast('지도에서 내가 있는 곳을 눌러 주세요', 5000);
+  MAP.obj.once('click', e => {
+    el.style.cursor = '';
+    setLoc(e.latlng.lat, e.latlng.lng, '지도에서 고른 위치');
+  });
+}
+
+function openLocModal(note) {
+  const isFile = location.protocol === 'file:';
+  modal(`
+    <h3>내 위치</h3>
+    <p class="msub">지금 기준: <b>${esc(LOC.name)}</b> (${LOC.lat.toFixed(3)}, ${LOC.lon.toFixed(3)})</p>
+    ${note ? `<div class="banner warn"><div class="banner-icon ms">location_on</div>
+              <div><strong>위치를 자동으로 잡지 못했습니다</strong><p>${esc(note)}</p></div></div>` : ''}
+    ${isFile ? `<div class="note">이 앱을 <b>웹 주소(https)</b>로 열면 '지금 내 위치 잡기'가 바로 됩니다.
+                 파일로 열었을 때는 아래 두 가지로 정해 주세요.</div>` : ''}
+    <button class="primary wide" id="loc-auto"><span class="ms">gps_fixed</span> 지금 내 위치 잡기</button>
+    <button class="ghost wide" id="loc-map"><span class="ms">map</span> 지도에서 직접 찍기</button>
+    <div class="where-row">
+      <label>지역에서 고르기</label>
+      <select id="loc-region">
+        <option value="">— 지역 선택 —</option>
+        ${REGIONS.map((r,i) => `<option value="${i}">${esc(r.name)}</option>`).join('')}
+      </select>
+    </div>
+    <button class="ghost wide" id="loc-reset">기본 위치(고창읍)로 되돌리기</button>
+  `);
+  $('#loc-auto').onclick = () => { closeModal(); locate(true); };
+  $('#loc-map').onclick  = pickOnMap;
+  $('#loc-region').onchange = e => {
+    const r = REGIONS[+e.target.value];
+    if (r) { closeModal(); setLoc(r.lat, r.lon, r.name); }
+  };
+  $('#loc-reset').onclick = () => { closeModal(); setLoc(DEFAULT_LOC.lat, DEFAULT_LOC.lon, DEFAULT_LOC.name); };
+}
+
+/* 시작할 때 — 저장해 둔 위치가 있으면 그걸 쓰고, 없으면 한 번 자동으로 잡아 본다 */
+function bootLocation() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(LOC_KEY) || 'null'); } catch (e) {}
+  if (saved && typeof saved.lat === 'number' && typeof saved.lon === 'number') {
+    LOC = saved;
+    loadWeather(); initCatch();
+    return;
+  }
+  LOC = { ...DEFAULT_LOC };
+  loadWeather(); initCatch();     /* 기본 위치로 먼저 보여주고 */
+  locate(false);                  /* 조용히 자동 시도 (되면 알아서 갱신) */
+}
+
+$('#btn-loc').onclick = () => openLocModal();
+
+/* 실황 갱신 — 5분마다. 탭이 백그라운드면 통신을 아끼되,
+   값이 STALE 을 넘기면 숨겨져 있어도 한 번은 받아 온다.
+   (일부 환경은 화면이 보이는데도 hidden 을 true 로 보고한다.
+    그때 위젯이 조용히 멈춰 버리면 안 된다.) */
+setInterval(() => {
+  if (document.hidden && NOW && Date.now() - NOW.at < STALE) return;
+  fetchCurrent();
+}, 5 * 60 * 1000);
+
+/* 통신 없이도 "N분 전" 표시가 갱신되도록 1분마다 위젯만 다시 그린다 */
+setInterval(renderNow, 60 * 1000);
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && NOW && Date.now() - NOW.at > 2 * 60 * 1000) fetchCurrent();
+});
+
+myCode();
+bootLocation();
+render3();
+
+</script>
+
+<script>
+/* ============================================================
+   밝게 / 어둡게 전환
+   ------------------------------------------------------------
+   · 고른 적이 없으면 휴대폰 설정을 따라간다.
+   · 한 번 고르면 그 선택이 항상 이기고, 다음에 열어도 기억한다.
+   ============================================================ */
+(function(){
+  const root = document.documentElement, btn = document.getElementById('btn-theme');
+  const sysDark = () => window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+  const nowTheme = () => root.getAttribute('data-theme') || (sysDark() ? 'dark' : 'light');
+
+  function paint(redraw){
+    const dark = nowTheme() === 'dark';
+    document.getElementById('theme-ico').textContent = dark ? 'light_mode' : 'dark_mode';  /* 바꿀 수 있는 쪽을 보여준다 */
+    btn.setAttribute('aria-label', dark ? '밝은 화면으로 바꾸기' : '어두운 화면으로 바꾸기');
+    /* 지도 타일만 갈아 끼운다 — render1()을 부르면 보던 위치·확대가 초기화된다 */
+    if (redraw && typeof refreshMapTiles === 'function'){ try{ refreshMapTiles(); }catch(e){} }
+  }
+
+  btn.onclick = () => {
+    const next = nowTheme() === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try{ localStorage.setItem('nm.theme', next); }catch(e){}
+    paint(true);
+  };
+
+  /* 아직 직접 고르지 않았다면 휴대폰 설정이 바뀔 때 따라간다 */
+  if (window.matchMedia){
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (!root.hasAttribute('data-theme')) paint(true);
+    });
+  }
+  paint(false);
+})();
+</script>
+</body>
+</html>
