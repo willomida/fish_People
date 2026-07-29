@@ -9,6 +9,8 @@
 <!-- 진짜 지도 (Leaflet + OpenStreetMap) — API 키가 필요 없어 file:// 에서도 열린다 -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- 초대 코드를 서버에 남기는 용도. 못 불러와도 앱은 그대로 돈다(localStorage 로 버틴다) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <!-- 화면 아이콘 (Google Material Symbols) — 날씨 표시 이모지는 그대로 두고 UI만 이걸 쓴다 -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block">
@@ -707,7 +709,7 @@ button.wide{display:block; width:100%; margin-top:10px}
     <div class="inv-code" id="my-code">—</div>
     <p class="inv-help">상대가 이 코드를 입력하고, 내가 수락하면 연결됩니다.</p>
     <div class="row">
-      <input id="code-input" placeholder="친구 코드 입력 (예: AB12-CD34)" maxlength="9">
+      <input id="code-input" placeholder="친구 코드 입력 (예: AB23-CD45)" maxlength="9">
       <button class="primary" id="btn-add-friend">추가</button>
     </div>
     <div id="friend-msg" class="note hide"></div>
@@ -746,6 +748,20 @@ button.wide{display:block; width:100%; margin-top:10px}
         <option value="private">비공개</option>
       </select>
     </div>
+  </div>
+
+  <h2 class="sec-title">시연 모드 <small>발표용</small></h2>
+  <div class="card">
+    <label class="check"><input type="checkbox" id="set-demo">
+      <span>사진 판별 대신 정해진 어종을 순서대로 내보내기</span></label>
+    <p class="fine">
+      켜면 찍는 순서대로 <b>숭어 → 붕어 → 잉어</b>가 1번 후보로 나옵니다.
+      네 번째부터는 다시 숭어부터 돌아갑니다. 사진 내용은 보지 않습니다.<br>
+      기록 화면에 <b>“시연 모드”</b>라고 표시되며, 실제 판별 결과가 아님을 함께 알립니다.
+    </p>
+    <div class="frow"><label>진행</label>
+      <span id="demo-step">다음: 숭어</span></div>
+    <button class="ghost wide" id="btn-demo-reset">순서 처음으로 되돌리기</button>
   </div>
 
   <h2 class="sec-title">법규 데이터</h2>
@@ -1196,7 +1212,101 @@ const SPOTS = [
   { id:'sp12', name:'북한강 서종 수변', type:'민물', lat:37.6100, lon:127.3300,
     region:'경기 양평', fish:['붕어','쏘가리','잉어','메기'],
     park:true, wc:false, night:true, fee:'무료',
-    tip:'여울과 소가 번갈아 나온다. 쏘가리 루어 포인트.' }
+    tip:'여울과 소가 번갈아 나온다. 쏘가리 루어 포인트.' },
+
+  /* ── 서해 (충남) ─────────────────────────────────────── */
+  { id:'sp13', name:'대천항 방파제', type:'바다', lat:36.3086, lon:126.5083,
+    region:'충남 보령', fish:['우럭','광어','주꾸미','삼치'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'방파제가 길어 자리가 넉넉하다. 가을 주꾸미 시즌에 붐빈다.' },
+  { id:'sp14', name:'무창포 방파제', type:'바다', lat:36.2547, lon:126.5236,
+    region:'충남 보령', fish:['우럭','놀래미','주꾸미'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'신비의 바닷길이 열리는 날은 사람이 몰린다. 물때 확인 필수.' },
+  { id:'sp15', name:'백사장항', type:'바다', lat:36.5497, lon:126.3272,
+    region:'충남 태안', fish:['우럭','광어','놀래미'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'안면도 초입. 주차·화장실이 잘 되어 있어 가족 단위로 무난하다.' },
+  { id:'sp16', name:'홍원항', type:'바다', lat:36.1147, lon:126.5406,
+    region:'충남 서천', fish:['우럭','광어','전어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'가을 전어로 유명하다. 방파제 끝은 파도가 넘칠 때가 있다.' },
+
+  /* ── 남해 (전남) ─────────────────────────────────────── */
+  { id:'sp17', name:'돌산대교 밑', type:'바다', lat:34.7419, lon:127.7469,
+    region:'전남 여수', fish:['감성돔','볼락','농어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'조류가 세다. 밤에 가로등 불빛 아래로 고기가 붙는다.' },
+  { id:'sp18', name:'신지도 명사십리', type:'바다', lat:34.3231, lon:126.8047,
+    region:'전남 완도', fish:['감성돔','볼락','참돔'],
+    park:true, wc:true, night:false, fee:'무료',
+    tip:'모래 해변과 갯바위가 함께 있다. 갯바위는 밀물 타이밍 주의.' },
+  { id:'sp19', name:'서망항', type:'바다', lat:34.3103, lon:126.1519,
+    region:'전남 진도', fish:['감성돔','농어','우럭'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'먼 길이지만 씨알이 굵다. 바람 부는 날은 진입로가 험하다.' },
+
+  /* ── 남해 (경남·부산) ────────────────────────────────── */
+  { id:'sp20', name:'지세포항', type:'바다', lat:34.8394, lon:128.7078,
+    region:'경남 거제', fish:['감성돔','볼락','참돔'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'선상 낚시 배가 많이 뜬다. 방파제만으로도 볼락이 붙는다.' },
+  { id:'sp21', name:'다대포 방파제', type:'바다', lat:35.0489, lon:128.9664,
+    region:'부산 사하', fish:['볼락','감성돔','고등어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'도심 접근성이 좋다. 낙동강 하구라 민물이 섞여 어종이 다양하다.' },
+  { id:'sp22', name:'태종대 갯바위', type:'바다', lat:35.0525, lon:129.0872,
+    region:'부산 영도', fish:['감성돔','볼락','참돔'],
+    park:true, wc:true, night:false, fee:'무료',
+    tip:'갯바위까지 내려가는 길이 가파르다. 어르신께는 권하지 않는다.' },
+
+  /* ── 동해 ────────────────────────────────────────────── */
+  { id:'sp23', name:'구룡포항', type:'바다', lat:35.9906, lon:129.5533,
+    region:'경북 포항', fish:['볼락','학공치','고등어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'겨울 학공치가 붙는다. 방파제 안쪽은 바람을 덜 탄다.' },
+  { id:'sp24', name:'후포항', type:'바다', lat:36.6819, lon:129.4536,
+    region:'경북 울진', fish:['볼락','학공치','대구'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'겨울 대구 시즌에 선상 배가 많이 뜬다.' },
+  { id:'sp25', name:'사천진항', type:'바다', lat:37.8106, lon:128.8828,
+    region:'강원 강릉', fish:['볼락','학공치','광어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'수심이 깊어 방파제에서도 씨알이 나온다. 너울에 주의.' },
+  { id:'sp26', name:'속초 청호동 방파제', type:'바다', lat:38.1922, lon:128.5947,
+    region:'강원 속초', fish:['볼락','학공치','숭어'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'시내에서 가깝다. 안전난간이 있어 초보에게 좋다.' },
+
+  /* ── 민물 (호수·강) ──────────────────────────────────── */
+  { id:'sp27', name:'예당저수지', type:'민물', lat:36.6614, lon:126.8103,
+    region:'충남 예산', fish:['붕어','잉어','배스','메기'],
+    park:true, wc:true, night:true, fee:'유료(좌대)',
+    tip:'전국 최대급 저수지. 좌대와 데크가 잘 되어 있어 오래 앉아 있기 편하다.' },
+  { id:'sp28', name:'대청호 문의', type:'민물', lat:36.4753, lon:127.4794,
+    region:'충북 청주', fish:['붕어','잉어','배스','쏘가리'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'상수원 보호구역이 섞여 있다. 낚시 금지 표지판을 꼭 확인할 것.' },
+  { id:'sp29', name:'충주호 목계', type:'민물', lat:37.0089, lon:127.9089,
+    region:'충북 충주', fish:['붕어','잉어','쏘가리','메기'],
+    park:true, wc:false, night:true, fee:'무료',
+    tip:'수위 변동이 크다. 쏘가리는 5/1~6/10 금어기라 시기 확인 필수.' },
+  { id:'sp30', name:'소양호 양구', type:'민물', lat:37.9569, lon:127.9906,
+    region:'강원 양구', fish:['붕어','쏘가리','메기','잉어'],
+    park:true, wc:false, night:true, fee:'무료',
+    tip:'산에 둘러싸여 바람이 적다. 길이 좁아 야간 진입은 조심.' },
+  { id:'sp31', name:'안동호 와룡', type:'민물', lat:36.6094, lon:128.8069,
+    region:'경북 안동', fish:['붕어','잉어','배스'],
+    park:true, wc:false, night:true, fee:'무료',
+    tip:'배스 자원이 많다. 토종 붕어는 수초대를 노려야 한다.' },
+  { id:'sp32', name:'옥정호 운암', type:'민물', lat:35.5806, lon:127.1053,
+    region:'전북 임실', fish:['붕어','잉어','배스'],
+    park:true, wc:false, night:true, fee:'무료',
+    tip:'안개가 자주 낀다. 새벽 물안개가 아름답지만 시야가 나쁠 수 있다.' },
+  { id:'sp33', name:'남한강 여주', type:'민물', lat:37.2983, lon:127.6369,
+    region:'경기 여주', fish:['붕어','잉어','쏘가리','메기'],
+    park:true, wc:true, night:true, fee:'무료',
+    tip:'둔치에 주차하고 바로 앉을 수 있다. 비 온 뒤 물이 불면 위험하다.' }
 ];
 
 /* ── 배지 ────────────────────────────────────────────────
@@ -1470,8 +1580,9 @@ const Vision = (() => {
    낚시 도감 — 앱 본체
    ------------------------------------------------------------
    R-1 날씨/스팟 · R-2 사진 기록 · R-3 법규 알림 · R-4 도감 · R-5 친구
-   서버 없이 브라우저 안에서만 돈다. 날씨만 실제 API(Open-Meteo)를
-   쓰고, 나머지 데이터는 localStorage 에 담긴다.
+   기록은 브라우저 안(localStorage)에 담긴다. 밖으로 나가는 건 둘뿐이다.
+   날씨(Open-Meteo) 와, 친구가 찾을 수 있도록 서버에 남기는 초대 코드
+   (Supabase fp_angler — 아래 10번 절). 둘 다 끊겨도 앱은 그대로 돈다.
    ============================================================ */
 'use strict';
 
@@ -1499,6 +1610,8 @@ function load() {
   return Object.assign({
     nick: '나',
     code: null,
+    anglerId: null,        /* 서버(fp_angler)에 등록된 내 행의 id */
+    secret: null,          /* 내 행을 고칠 때 쓰는 비밀값. 서버는 이걸 돌려주지 않는다 */
     privacy: 'spot',
     catches: [],
     friends: [],
@@ -1506,9 +1619,17 @@ function load() {
     reviews: {},
     likes: {},
     badges: [],
-    regOverride: {}
+    regOverride: {},
+    demo: false,          /* 시연 모드 — 어종을 정해진 순서로 내보낸다 */
+    demoStep: 0           /* 지금까지 몇 장 찍었나 */
   }, s);
 }
+
+/* ── 시연 모드 ────────────────────────────────────────────
+   발표 자리에서 사진 판별이 엉뚱하게 나오면 흐름이 끊긴다.
+   켜 두면 찍는 순서대로 아래 어종이 1번 후보로 확정되어 나온다.
+   기본값은 꺼짐 — 켜져 있을 때는 화면에 그렇게 적어 둔다. */
+const DEMO_ORDER = ['mullet', 'crucian', 'carp'];   /* 숭어 → 붕어 → 잉어 */
 function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify(S));
@@ -2304,6 +2425,26 @@ function onPhoto(img) {
   $('#step-id').classList.remove('hide');
   $('#shot').src = draft.photo;
 
+  /* 시연 모드 — 사진 내용과 상관없이 정해 둔 순서의 어종을 내보낸다.
+     발표 중 판별이 엉뚱하게 나와 흐름이 끊기는 걸 막으려는 장치이므로,
+     켜져 있다는 사실을 화면에 분명히 적어 둔다. */
+  if (S.demo) {
+    const want = FISH.find(f => f.id === DEMO_ORDER[S.demoStep % DEMO_ORDER.length]);
+    if (want) {
+      S.demoStep++; save();
+      const others = FISH.filter(f => f.id !== want.id && f.water === want.water).slice(0, 2);
+      const cands = [{ fish: want, confidence: 93 }]
+        .concat(others.map((f, i) => ({ fish: f, confidence: 38 - i * 9 })));
+      draft.cands = cands;
+      $('#shot-meta').innerHTML =
+        `<b>시연 모드</b> · ${S.demoStep}번째 사진<br>사진을 분석하지 않고 미리 정해 둔 어종을 보여줍니다.`;
+      $('#id-note').innerHTML =
+        '<b>시연 모드가 켜져 있습니다.</b> 실제 판별 결과가 아닙니다 — 설정 화면에서 끌 수 있습니다.';
+      renderCands(cands, true);
+      return;
+    }
+  }
+
   if (!feat.ok) {
     $('#shot-meta').innerHTML = '사진에서 물고기 윤곽을 찾지 못했습니다.';
     $('#id-note').innerHTML =
@@ -2332,8 +2473,13 @@ function onPhoto(img) {
       '색·형태로 추정한 결과입니다. 실제 어종과 다르면 다른 후보나 직접 찾기를 눌러 주세요.';
   }
 
+  renderCands(cands, top.confidence >= 55);
+}
+
+/* 후보 카드 그리기 — 자동 판별과 시연 모드가 함께 쓴다 */
+function renderCands(cands, markTop) {
   $('#cand-list').innerHTML = cands.map((c, i) => `
-    <div class="cand ${i===0 && top.confidence>=55 ? 'top':''}" data-fish="${c.fish.id}">
+    <div class="cand ${i===0 && markTop ? 'top':''}" data-fish="${c.fish.id}">
       <span class="em">${c.fish.emoji}</span>
       <div class="info"><strong>${esc(c.fish.name)}</strong>
         <small>${c.fish.water} · ${esc(c.fish.habitat)}</small></div>
@@ -2841,18 +2987,38 @@ function render4() {
   });
 }
 
-$('#btn-add-friend').onclick = () => {
-  const v = $('#code-input').value.trim().toUpperCase();
+/* 코드에 쓰는 글자 — 눈으로 헷갈리는 I·L·O 와 0·1 은 빼 두었다.
+   서버의 CHECK 제약과 같은 규칙이라, 여기서 걸리면 서버까지 가지도 않는다. */
+const CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ]{2}[2-9]{2}-[ABCDEFGHJKMNPQRSTUVWXYZ]{2}[2-9]{2}$/;
+
+$('#btn-add-friend').onclick = async () => {
+  const btn = $('#btn-add-friend');
+  const v   = $('#code-input').value.trim().toUpperCase();
   const msg = $('#friend-msg');
   msg.classList.remove('hide');
-  if (!/^[A-Z]{2}\d{2}-[A-Z]{2}\d{2}$/.test(v)) {
-    msg.textContent = '코드 형식이 맞지 않습니다. 예: AB12-CD34'; return;
+
+  if (!CODE_RE.test(v)) {
+    msg.textContent = '코드 형식이 맞지 않습니다. 예: AB23-CD45 (I·L·O·0·1 은 쓰지 않습니다)'; return;
   }
   if (v === myCode()) { msg.textContent = '내 코드입니다.'; return; }
   if (S.friends.some(f => f.code === v)) { msg.textContent = '이미 연결된 친구입니다.'; return; }
   if (S.pending.indexOf(v) !== -1) { msg.textContent = '이미 요청을 보냈습니다.'; return; }
+
+  /* 있는 코드인지 서버에 물어본다. 못 물어보면 예전처럼 그냥 받아 준다 —
+     서버가 잠깐 안 된다고 친구 추가까지 막을 이유는 없다. */
+  btn.disabled = true;
+  msg.textContent = '코드를 확인하는 중입니다…';
+  const r = await lookupCode(v);
+  btn.disabled = false;
+
+  if (r.state === 'none') {
+    msg.textContent = '그 코드를 쓰는 사람이 없습니다. 다시 확인해 주세요.'; return;
+  }
+
   S.pending.push(v); save();
-  msg.textContent = '요청을 보냈습니다. 상대가 수락하면 연결됩니다.';
+  msg.textContent = r.state === 'found'
+    ? r.row.nickname + ' 님에게 요청을 보냈습니다. 상대가 수락하면 연결됩니다.'
+    : '요청을 보냈습니다. 상대가 수락하면 연결됩니다.';
   $('#code-input').value = '';
   render4();
 };
@@ -2933,6 +3099,8 @@ function shareCard(id) {
 function render5() {
   $('#set-nick').value = S.nick;
   $('#set-privacy').value = S.privacy;
+  $('#set-demo').checked = !!S.demo;
+  $('#demo-step').textContent = demoNextLabel();
   $('#reg-meta').innerHTML =
     `${esc(REG_META.source)}<br>기준일 <b>${REG_META.baseDate}</b> · 수정된 어종 ${Object.keys(S.regOverride).length}건<br>${esc(REG_META.notice)}`;
   $('#admin-fish').innerHTML = FISH.map(f =>
@@ -2949,8 +3117,28 @@ function fillAdmin() {
   $('#admin-grade').value = R.grade || '';
   $('#admin-date').value  = R.date;
 }
-$('#set-nick').onchange = e => { S.nick = e.target.value.trim() || '나'; save(); render4(); };
+$('#set-nick').onchange = e => {
+  S.nick = e.target.value.trim() || '나'; save(); render4();
+  syncNickname();   /* 친구가 보는 이름도 같이 바뀌도록 */
+};
 $('#set-privacy').onchange = e => { S.privacy = e.target.value; save(); };
+
+/* ── 시연 모드 ────────────────────────────────────────── */
+function demoNextLabel() {
+  const next = FISH.find(f => f.id === DEMO_ORDER[S.demoStep % DEMO_ORDER.length]);
+  const order = DEMO_ORDER.map(id => (fishById(id) || {}).name).filter(Boolean).join(' → ');
+  return `${order}  ·  다음은 ${next ? next.name : '?'}`;
+}
+$('#set-demo').onchange = e => {
+  S.demo = e.target.checked;
+  if (S.demo) S.demoStep = 0;          /* 켤 때마다 순서를 처음부터 */
+  save(); render5();
+  toast(S.demo ? '시연 모드를 켰습니다 — 숭어부터 나옵니다' : '시연 모드를 껐습니다');
+};
+$('#btn-demo-reset').onclick = () => {
+  S.demoStep = 0; save(); render5();
+  toast('다음 사진부터 숭어로 시작합니다');
+};
 $('#btn-admin').onclick = () => $('#admin-panel').classList.toggle('hide');
 $('#admin-fish').onchange = fillAdmin;
 $('#btn-admin-save').onclick = () => {
@@ -2976,6 +3164,8 @@ $('#btn-admin-reset').onclick = () => {
 $('#btn-wipe').onclick = () => {
   if (!confirm('기록·도감·친구를 모두 지웁니다. 되돌릴 수 없습니다. 계속할까요?')) return;
   localStorage.removeItem(KEY); S = load(); save();
+  sbClient = null;      /* 새 secret 으로 다시 만들어야 한다 */
+  myCode(); registerAngler();
   render3(); render4(); render5(); toast('모두 지웠습니다');
 };
 
@@ -3180,7 +3370,108 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && NOW && Date.now() - NOW.at > 2 * 60 * 1000) fetchCurrent();
 });
 
+/* ══════════════════════════════════════════════════════════
+   10. 서버 — 초대 코드를 fp_angler 에 남긴다
+   ------------------------------------------------------------
+   여기서만 서버를 쓴다. 조과·도감·배지는 여전히 이 브라우저 안에만 있다.
+   서버에 올라가는 건 "이 코드를 쓰는 사람이 있고, 닉네임은 무엇인가" 뿐이다.
+   그래야 상대가 내 코드를 쳤을 때 실제로 찾아진다.
+
+   로그인이 없으므로 본인 확인은 secret 으로 한다. 서버의 RLS 정책이
+   x-angler-secret 헤더와 행의 secret 을 맞춰 보고, 맞을 때만 수정을 허락한다.
+   anon 은 secret 을 읽을 권한이 없다 — 그래서 서버가 만들어 주길 기다리지 않고
+   이쪽에서 만들어 보낸 뒤, 이쪽에서만 들고 있는다.
+   ══════════════════════════════════════════════════════════ */
+const SB_URL  = 'https://rrgrwqosuankdyfuxlnb.supabase.co';
+const SB_ANON = 'sb_publishable_3JOQBPKViwLIh3D4ZNMXeQ__cDl-KUb';
+
+function mySecret() {
+  if (!S.secret) {
+    S.secret = (crypto.randomUUID)
+      ? crypto.randomUUID()
+      /* 오래된 브라우저 대비 — 형식만 맞으면 되고, 값은 못 맞히기만 하면 된다 */
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, ch => {
+          const r = crypto.getRandomValues(new Uint8Array(1))[0] % 16;
+          return (ch === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+    save();
+  }
+  return S.secret;
+}
+
+let sbClient = null;
+function sb() {
+  if (sbClient) return sbClient;
+  if (!window.supabase) return null;      /* CDN 이 막혔다 — 조용히 포기 */
+  sbClient = window.supabase.createClient(SB_URL, SB_ANON, {
+    auth: { persistSession: false },
+    global: { headers: { 'x-angler-secret': mySecret() } }
+  });
+  return sbClient;
+}
+
+/* 내 코드를 서버에 등록한다. 이미 등록했으면 닉네임만 맞춰 둔다.
+   코드가 남과 겹치면(23505) 새로 뽑아서 다시 시도한다. */
+async function registerAngler() {
+  const c = sb();
+  if (!c) return;
+
+  if (S.anglerId) { syncNickname(); return; }
+
+  for (let tries = 0; tries < 5; tries++) {
+    const { data, error } = await c
+      .from('fp_angler')
+      /* secret 은 보내되 돌려받지는 않는다. select 에 넣으면 권한 오류가 난다. */
+      .insert({ invite_code: myCode(), nickname: S.nick, secret: mySecret() })
+      .select('id, invite_code')
+      .single();
+
+    if (!error) {
+      S.anglerId = data.id;
+      S.code = data.invite_code;   /* 서버가 최종 확정한 값으로 맞춘다 */
+      save();
+      render4();
+      return;
+    }
+
+    if (error.code === '23505') { /* 그 코드는 남이 쓰는 중 */
+      S.code = null; myCode();
+      continue;
+    }
+
+    console.warn('[낚시민족] 초대 코드 등록 실패 — 이번엔 로컬 코드로만 씁니다', error);
+    return;
+  }
+  console.warn('[낚시민족] 빈 초대 코드를 5회 시도에도 찾지 못했습니다');
+}
+
+/* 닉네임은 서버에서도 바꿀 수 있다(그 컬럼만 권한이 열려 있다) */
+async function syncNickname() {
+  const c = sb();
+  if (!c || !S.anglerId) return;
+  const { error } = await c.from('fp_angler')
+    .update({ nickname: S.nick })
+    .eq('id', S.anglerId);
+  if (error) console.warn('[낚시민족] 닉네임 동기화 실패', error);
+}
+
+/* 상대 코드가 실제로 있는지 확인한다.
+   found  — 그 코드를 쓰는 사람이 있다 (nickname 이 딸려 온다)
+   none   — 서버에 없다
+   offline— 서버에 못 물어봤다. 이때는 막지 않고 통과시킨다. */
+async function lookupCode(code) {
+  const c = sb();
+  if (!c) return { state: 'offline' };
+  const { data, error } = await c.from('fp_angler')
+    .select('id, invite_code, nickname')
+    .eq('invite_code', code)
+    .maybeSingle();
+  if (error) { console.warn('[낚시민족] 코드 조회 실패', error); return { state: 'offline' }; }
+  return data ? { state: 'found', row: data } : { state: 'none' };
+}
+
 myCode();
+registerAngler();   /* 서버 등록은 기다리지 않는다 — 화면이 먼저 뜨는 게 낫다 */
 bootLocation();
 render3();
 
