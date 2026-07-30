@@ -1134,6 +1134,32 @@ const FISH = [
     note:'아래턱만 길게 튀어나온 독특한 생김새.' }
 ];
 
+/* 어종 상세 화면에 붙일 학술정보 조각. 자료가 없는 어종은 아무것도 안 그린다. */
+function nifsBlock(id) {
+  const n = NIFS[id];
+  if (!n) return '';
+  const row = (k, v) => v ? `<div class="kv"><b>${k}</b><span>${esc(v)}</span></div>` : '';
+  return `
+    <h3 style="font-size:15px;margin-top:18px">학술 정보 <small>국립수산과학원</small></h3>
+    ${row('학명', n.sci)}
+    ${row('영명', n.eng)}
+    ${row('일명', n.jpn)}
+    ${row('분류', [n.order, n.family].filter(Boolean).join(' · '))}
+    ${row('다른 이름', n.dia)}
+    ${row('어종코드', n.code)}`;
+}
+
+/* ── 어종 학술정보 (국립수산과학원 생물종정보 OpenAPI) ──────
+   https://www.nifs.go.kr/api/OpenAPI_json?id=frcenterInfo2
+   ⚠️ 실시간으로 부르지 않고 값만 받아 와 넣어 두었다. 두 가지 이유다.
+     1) 이 API 는 CORS 헤더를 주지 않아 브라우저에서 직접 못 부른다.
+     2) 부르려면 인증키가 필요한데, 이 앱은 공개 페이지라 키가 그대로 노출된다.
+   학명·분류는 거의 바뀌지 않으므로 넣어 두는 편이 빠르고 안전하다.
+   미호종개·흰수마자·퉁사리는 이 API 에 없어 빠져 있다.
+   dia = 지역에서 부르는 다른 이름(방언). 어르신들이 실제로 쓰는 말이라 함께 보여준다.
+   ─────────────────────────────────────────────────────── */
+const NIFS = {"crucian":{"sci":"Carassius auratus","eng":"Crusian carp","order":"잉어목","family":"잉어과","dia":"떡붕어, 뚱붕어, 보치붕어, 붕애, 붕어지, 빰치, 청붕어, 희나리","code":"670707"},"carp":{"sci":"Cyprinus carpio","eng":"common carp","order":"잉어목","family":"잉어과","code":"671402"},"mandarin":{"sci":"Siniperca scherzeri","eng":"Mandarin fish","order":"검정우럭목","family":"쏘가리과","dia":"금잉어, 소갈이, 쏘래기","code":"671104"},"catfish":{"sci":"Silurus asotus","eng":"Far eastern catfish","order":"메기목","family":"메기과","dia":"미거지, 미기","code":"670304"},"snakehead":{"sci":"Channa argus","eng":"Snake head","order":"버들붕어목","family":"가물치과","dia":"가마치, 가무치, 까마치"},"eel":{"sci":"Anguilla japonica","eng":"Eel","order":"뱀장어목","family":"뱀장어과","dia":"궁자, 배암쟁이, 장치, 짱어","code":"670601"},"sweetfish":{"sci":"Plecoglossus altivelis","eng":"Ayu","order":"바다빙어목","family":"은어과","dia":"언어","code":"670801"},"minnow":{"sci":"Zacco platypus","eng":"Pale chub","order":"잉어목","family":"왜몰개과","dia":"피라지, 피래미, 피리, 행베리","code":"671412"},"bass":{"sci":"Micropterus salmoides","eng":"Large mouth bass","order":"검정우럭목","family":"검정우럭과","code":"614803"},"bluegill":{"sci":"Lepomis macrochirus","eng":"Blue gill","order":"검정우럭목","family":"검정우럭과","code":"614804"},"gamdol":{"sci":"Pseudopungtungia nigra","eng":"Black shinner","order":"잉어목","family":"모래무지과","dia":"금강돗쟁이"},"eoreumchi":{"sci":"Hemibarbus mylodon","eng":"Spotted barbel","order":"잉어목","family":"모래무지과"},"blackporgy":{"sci":"Acanthopagrus schlegelii","eng":"Black porgy","order":"양쥐돔목","family":"양쥐돔과","dia":"감성어, 감상어(전남), 감성도미(경북), 감셍이(부산), 구릿(제주도), 맹이, 남정바리(강원도)"},"redseabream":{"sci":"Pagrus major","eng":"Red seabream","order":"양쥐돔목","family":"양쥐돔과","code":"612302"},"flounder":{"sci":"Paralichthys olivaceus","eng":"Bastard halibut","jpn":"ヒラメ","order":"전갱이목","family":"넙치과","dia":"광에, 도다리, 광어, 넙","code":"611301"},"rockfish":{"sci":"Sebastes schlegelii","eng":"Korean rockfish","order":"농어목","family":"양볼락과","dia":"우레기","code":"613406"},"seabass":{"sci":"Lateolabrax japonicus","eng":"Seaperch","family":"농어과","dia":"까지맥이, 깔다구, 깔대기, 깡다구, 껄떡, 농에, 독도돔, 연어병치, 까지맥이, 깔다구, 껄떡이, 농에","code":"611601"},"darkbanded":{"sci":"Sebastes inermis","eng":"Dark-banded rockfish","order":"농어목","family":"양볼락과","dia":"뽈낙이, 뽈낙구, 열기, 순볼래기(전남), 꺽저구(경북), 열광이, 우레기, 구럭(함남), 열갱이(강원)"},"mackerel":{"sci":"Scomber japonicus","eng":"Chub mackerel","jpn":"Common mackerel,","order":"고등어목","family":"고등어과","dia":"가라지, 고도리, 꼬등어, 소고도리, 고도리, 고도어, 고동어, 고망어, 소고도리, 열소고도리, 통소고도리","code":"610504"},"horsemackerel":{"sci":"Trachurus japonicus","eng":"Jack mackerel","order":"전갱이목","family":"전갱이과","dia":"각재기, 매가리, 아지, 전겡이, 가라지, 각재기, 매생이, 메가리, 빈쟁이, 전광어"},"hairtail":{"sci":"Trichiurus japonicus","order":"고등어목","family":"갈치과"},"codfish":{"sci":"Gadus macrocephalus","eng":"Pacific cod","order":"대구목","family":"대구과","dia":"대구어, 대두어(통영), 대기(함남)","code":"612015"},"righteye":{"sci":"Pseudopleuronectes yokohamae","eng":"Marbled flounder","order":"전갱이목","family":"가자미과"},"squid":{"sci":"Todarodes pacificus","eng":"Flying squid","order":"개안목","family":"살오징어과","dia":"오징어, 피둥어꼴뚜기, 물오징어","code":"640301"},"octopus_s":{"sci":"Amphioctopus fangsiao","eng":"Webfoot octopus","order":"문어목","family":"문어과","dia":"쭈게미, 쭈깨미, 쭉지미, 호래기, 금테문어, 죽거미, 쯔그미, Octopus ocellatus","code":"640701"},"crab":{"sci":"Portunus trituberculatus","eng":"Swimming crab","order":"십각목","family":"꽃게과","dia":"꽃그이, 날개꽃게","code":"630205"},"gizzard":{"sci":"Konosirus punctatus","eng":"Konoshiro gizzard shad","order":"청어목","family":"전어과","code":"615502"},"mullet":{"sci":"Mugil cephalus","eng":"Common mullet","order":"숭어목","family":"숭어과","dia":"글거지, 동어, 모댕이, 모치, 몰치, 수치 마루쟁이, 옹어, 저푸리, 은숭어","code":"614308"},"halfbeak":{"sci":"Hyporhamphus sajori","eng":"Half beak","order":"동갈치목","family":"학공치과","dia":"꽁치, 사요리, 사이루, 청갈치, 곰능이, 공매리, 공미리, 공치, 굉메리, 순붕이, 청망어"}};
+
 /* ── 낚시 포인트 ─────────────────────────────────────────
    type: '민물' | '바다',  night: 야간 가능,  park: 주차,  wc: 화장실
    ───────────────────────────────────────────────────────── */
@@ -2881,6 +2907,7 @@ function openFish(id) {
     <div class="kv"><b>섭취</b><span>${f.water === '민물' && f.para ? '⚠️ 생식 금지 — 간흡충 위험, 반드시 익혀서' : f.edible ? '식용 가능' : '식용 대상 아님'}</span></div>
     <div class="kv"><b>메모</b><span>${esc(f.note)}</span></div>
     <p class="fine" style="margin-top:10px">규정 기준일 ${R.date}${R.edited ? ' · 운영자 수정본' : ''} · ${esc(REG_META.notice)}</p>
+    ${nifsBlock(f.id)}
 
     <h3 style="font-size:15px;margin-top:18px">내 기록</h3>
     ${mine.length
