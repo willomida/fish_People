@@ -354,6 +354,15 @@ button.wide{display:block; width:100%; margin-top:10px}
 .conf-bar{height:4px; background:var(--line); border-radius:3px; margin-top:3px; overflow:hidden}
 .conf-bar i{display:block; height:100%; background:var(--sea)}
 .cand.top{border-color:var(--sea); border-width:2px}
+.cand .why{display:block; color:var(--muted); font-size:12px; margin-top:3px}
+
+/* AI 판별을 기다리는 동안 */
+.ai-wait{display:inline-flex; align-items:center; gap:9px}
+.ai-spin{width:15px; height:15px; flex:0 0 15px; border-radius:50%;
+  border:2px solid var(--line); border-top-color:var(--sea);
+  animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){ .ai-spin{animation:none} }
 
 /* ── 측정 캔버스 ────────────────────────────────────── */
 .canvas-wrap{position:relative; border-radius:14px; overflow:hidden;
@@ -2713,7 +2722,34 @@ $('#cam-switch').onclick = async () => {              /* 휴대폰 앞뒤 카메
 };
 $('#cam-layer').addEventListener('click', e => { if (e.target.id === 'cam-layer') closeCam(); });
 
-function onPhoto(img) {
+/* ── AI 어종 판별 ───────────────────────────────────────
+   사진을 서버리스 함수(/api/identify)로 보낸다. API 키는 서버에만 있으므로
+   이 파일에는 키가 없다. 함수가 아직 배포되지 않았거나(=키 미설정),
+   오프라인이거나, file:// 로 열었으면 그냥 null 이 나오고
+   부르는 쪽이 기존 색·형태 추정으로 되돌아간다. */
+async function aiIdentify(photo, water) {
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 25000);
+    const r = await fetch('/api/identify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: ctl.signal,
+      body: JSON.stringify({
+        image: photo,
+        water: water,
+        species: FISH.map(f => ({ id: f.id, name: f.name, water: f.water }))
+      })
+    });
+    clearTimeout(timer);
+    const j = await r.json();
+    return j && j.ok ? j : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function onPhoto(img) {
   const spotId = $('#catch-spot').value;
   const spot = SPOTS.find(s => s.id === spotId);
   const feat = Vision.extract(img);
@@ -2752,6 +2788,45 @@ function onPhoto(img) {
     }
   }
 
+  /* ── AI 판별을 먼저 시도한다 ────────────────────────────
+     실패하면 아래 색·형태 추정으로 조용히 되돌아간다. 그래서 서버 함수가
+     없어도, 인터넷이 끊겨도 기록 흐름 자체는 끊기지 않는다. */
+  $('#shot-meta').innerHTML =
+    '<span class="ai-wait"><i class="ai-spin"></i>사진을 보고 어종을 찾는 중…</span>';
+  $('#id-note').innerHTML = '';
+  $('#cand-list').innerHTML = '';
+
+  const ai = await aiIdentify(draft.photo, spot ? spot.type : null);
+  if (draft.img !== img) return;      /* 기다리는 사이 다른 사진을 올렸으면 버린다 */
+
+  if (ai && ai.isFish) {
+    const cands = ai.candidates
+      .map(c => ({ fish: FISH.find(f => f.id === c.id), confidence: c.confidence, why: c.reason }))
+      .filter(c => c.fish);
+    if (cands.length) {
+      draft.cands = cands;
+      const top = cands[0];
+      $('#shot-meta').innerHTML =
+        'AI가 사진을 보고 판별했습니다.' +
+        (spot ? `<br>${esc(spot.name)}(${spot.type})에서 잡은 것으로 보고 판단했습니다.` : '');
+      $('#id-note').innerHTML = top.confidence < 55
+        ? `가장 높은 후보도 확신도가 <b>${top.confidence}%</b>로 낮습니다. 자동으로 정하지 않겠습니다 — 아래에서 고르거나 직접 찾아 주세요.`
+        : 'AI 판별 결과입니다. 실제 어종과 다르면 다른 후보나 <b>직접 찾기</b>를 눌러 주세요.';
+      renderCands(cands, top.confidence >= 55);
+      return;
+    }
+  }
+
+  if (ai && !ai.isFish) {
+    $('#shot-meta').innerHTML = '사진에서 물고기를 찾지 못했습니다.';
+    $('#id-note').innerHTML =
+      '물고기가 잘 보이게 다시 찍거나, <b>목록에서 직접 찾기</b>로 골라 주세요.';
+    $('#cand-list').innerHTML = '';
+    openPicker();
+    return;
+  }
+
+  /* ── 여기부터는 AI를 못 쓴 경우 — 색·형태로 추정한다 ──── */
   if (!feat.ok) {
     $('#shot-meta').innerHTML = '사진에서 물고기 윤곽을 찾지 못했습니다.';
     $('#id-note').innerHTML =
@@ -2789,7 +2864,8 @@ function renderCands(cands, markTop) {
     <div class="cand ${i===0 && markTop ? 'top':''}" data-fish="${c.fish.id}">
       <span class="em">${c.fish.emoji}</span>
       <div class="info"><strong>${esc(c.fish.name)}</strong>
-        <small>${c.fish.water} · ${esc(c.fish.habitat)}</small></div>
+        <small>${c.fish.water} · ${esc(c.fish.habitat)}</small>
+        ${c.why ? `<span class="why">${esc(c.why)}</span>` : ''}</div>
       <div class="conf"><b>${c.confidence}%</b>
         <div class="conf-bar"><i style="width:${c.confidence}%"></i></div></div>
     </div>`).join('');

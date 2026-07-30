@@ -1,0 +1,13 @@
+{
+  "name": "fish-people",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "낚시 민족 — 서버리스 함수 의존성만 담는다. 앱 자체는 index.html 한 파일이고 빌드가 없다.",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0"
+  }
+}
