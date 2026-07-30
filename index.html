@@ -217,7 +217,10 @@ button.wide{display:block; width:100%; margin-top:10px}
 .seg button.on.risk b{color:#fff}
 
 /* ── 필터 알약 ──────────────────────────────────────── */
-.filter-row{display:flex; gap:6px; flex-wrap:wrap; margin:10px 0}
+.filter-row{display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; align-items:center}
+/* 물종 고르기와 정렬 고르기를 눈으로 갈라 준다 */
+.filter-gap{flex:1 1 12px; min-width:8px}
+.pill .ms{font-size:15px; margin-right:1px; vertical-align:-3px}
 .pill{background:var(--panel); border:1px solid var(--line); border-radius:999px;
   padding:6px 14px; font-size:13px; cursor:pointer}
 .pill.on{background:var(--text); color:var(--bg); border-color:var(--text)}
@@ -566,6 +569,9 @@ button.wide{display:block; width:100%; margin-top:10px}
     <button class="pill on" data-water="all">전체</button>
     <button class="pill" data-water="민물">민물</button>
     <button class="pill" data-water="바다">바다</button>
+    <span class="filter-gap"></span>
+    <button class="pill on" data-sort="score"><span class="ms">sort</span> 추천순</button>
+    <button class="pill" data-sort="dist"><span class="ms">near_me</span> 가까운순</button>
   </div>
   <div id="spot-list"></div>
 
@@ -1624,6 +1630,7 @@ let WX = null;                  /* 슬롯별 날씨·지수 */
 let NOW = null;                 /* 지금 이 순간의 실황 (상단 위젯) */
 let slotIdx = 0;                /* 현재 보고 있는 시간대 */
 let spotFilter = 'all';
+let spotSort = 'score';         /* 'score' 추천순 · 'dist' 가까운순 */
 let dexFilter = 'all';
 let rankMode = 'len';
 
@@ -2082,26 +2089,50 @@ function render1() {
   renderSpots(w);
 }
 
+/* 스팟 추천 점수.
+   날씨 점수(w.score)는 모든 스팟이 같으므로, 여기서 '이 자리다운 조건'을 더해야
+   추천순이 거리순과 다른 의미를 갖는다. 거리만 빼면 두 정렬이 완전히 같아진다. */
 function spotScore(sp, w) {
   let s = w.score;
+
+  /* ① 오늘 날씨와의 궁합 */
   if (sp.type === '바다') {                       /* 바다는 바람에 더 민감 */
     if (w.wind > 8) s -= 14; else if (w.wind > 5) s -= 5;
   } else {
     if (w.rain >= 4) s -= 6;
   }
   if (!sp.night && w.slot.key === 'night') s -= 25;
+
+  /* ② 자리 자체의 조건 — 어르신이 오래 앉아 있기 좋은가 */
+  if (sp.wc)    s += 4;                           /* 화장실 */
+  if (sp.park)  s += 3;                           /* 주차 */
+  if (sp.night) s += 2;                           /* 야간 가능 */
+  if (String(sp.fee || '').includes('무료')) s += 2;
+  s += Math.min(4, (sp.fish || []).length);       /* 어종이 다양하면 */
+
+  /* ③ 다녀온 사람들의 별점 (3점을 기준으로 ±) */
+  const rv = S.reviews[sp.id] || [];
+  if (rv.length) s += Math.round((rv.reduce((t, r) => t + r.r, 0) / rv.length - 3) * 3);
+
+  /* ④ 거리 — 영향을 줄였다. 크면 추천이 곧 거리순이 되어 버린다 */
   const d = km(LOC, sp);
-  s -= Math.min(12, d / 8);
-  return { s: Math.max(3, Math.round(s)), d };
+  s -= Math.min(10, d / 12);
+
+  return { s: Math.max(3, Math.min(99, Math.round(s))), d };
 }
 
 function renderSpots(w) {
   const list = SPOTS
     .filter(sp => spotFilter === 'all' || sp.type === spotFilter)
     .map(sp => Object.assign({ sp }, spotScore(sp, w)))
-    .sort((a, b) => b.s - a.s);
+    /* 추천순은 점수 높은 곳부터(같으면 가까운 곳 먼저),
+       가까운순은 거리부터(같으면 점수 높은 곳 먼저) */
+    .sort((a, b) => spotSort === 'dist'
+      ? (a.d - b.d) || (b.s - a.s)
+      : (b.s - a.s) || (a.d - b.d));
 
-  $('#spot-count').textContent = `· ${w.slot.label} 기준`;
+  $('#spot-count').textContent =
+    `· ${w.slot.label} 기준 · ${spotSort === 'dist' ? '가까운순' : '추천순'}`;
 
   if (w.risk) {
     $('#spot-list').innerHTML =
@@ -3295,6 +3326,11 @@ function go(id) {
   if (id === 's-today' && MAP.obj) setTimeout(() => MAP.obj.invalidateSize(), 60);
 }
 $$('.tab').forEach(t => t.onclick = () => go(t.dataset.go));
+
+$$('[data-sort]').forEach(b => b.onclick = () => {
+  $$('[data-sort]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); spotSort = b.dataset.sort; render1();
+});
 
 $$('[data-water]').forEach(b => b.onclick = () => {
   $$('[data-water]').forEach(x => x.classList.remove('on'));
