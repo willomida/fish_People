@@ -444,6 +444,19 @@ button.wide{display:block; width:100%; margin-top:10px}
 .log .lb{display:flex; flex-direction:column; gap:4px}
 .mini{font-size:11px; padding:5px 9px; border-radius:8px; border:1px solid var(--line);
   background:var(--bg); cursor:pointer; white-space:nowrap}
+.mini:disabled{opacity:.45; cursor:default}
+.mini.ok{background:var(--sea); border-color:var(--sea); color:#fff; font-weight:600}
+.mini.no{color:var(--muted)}
+
+/* 친구 요청 — 받은 것과 보낸 것이 같은 모양을 쓴다 */
+.req{display:flex; align-items:center; gap:12px; background:var(--panel);
+  border:1px solid var(--line); border-radius:14px; padding:12px 14px;
+  margin-bottom:8px; box-shadow:var(--shadow)}
+.req-who{flex:1; min-width:0}
+.req-who strong{display:block; font-size:15px}
+.req-who small{color:var(--muted); font-size:12px}
+.req-act{display:flex; gap:6px; flex:0 0 auto}
+.req-act .mini{font-size:13px; padding:7px 13px}
 
 /* ── 친구 ───────────────────────────────────────────── */
 .invite-card{background:linear-gradient(135deg,var(--sea-d),var(--sea));
@@ -745,6 +758,7 @@ button.wide{display:block; width:100%; margin-top:10px}
     <div id="friend-msg" class="note hide"></div>
   </div>
 
+  <div id="inbox-box"></div>
   <div id="pending-box"></div>
 
   <h2 class="sec-title">이번 달 랭킹</h2>
@@ -1842,6 +1856,14 @@ let draft = null;
 function load() {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+
+  /* 예전 저장본은 pending 이 코드 문자열 배열이었다. 서버에 요청을 실제로
+     올리게 되면서 상대 id·닉네임·전송 여부를 같이 들고 있어야 한다. */
+  if (Array.isArray(s.pending)) {
+    s.pending = s.pending.map(p => typeof p === 'string'
+      ? { code: p, nick: null, id: null, sent: false } : p);
+  }
+
   return Object.assign({
     nick: '나',
     code: null,
@@ -3302,19 +3324,86 @@ function thisMonth(c) {
 function render4() {
   $('#my-code').textContent = myCode();
 
-  /* F-13 수락 대기 */
-  $('#pending-box').innerHTML = S.pending.length ? S.pending.map(p => `
-    <div class="banner info"><div class="banner-icon">⏳</div><div>
-      <strong>${esc(p)} — 수락 대기 중</strong>
-      <p>상대가 수락하면 연결됩니다. 서버 없는 데모라서, 아래 버튼으로 수락을 흉내 낼 수 있습니다.</p>
-      <button class="mini" data-accept="${esc(p)}" style="margin-top:6px">데모: 상대가 수락함</button>
-    </div></div>`).join('') : '';
+  /* F-13 받은 요청 — 수락하거나 거부한다 */
+  $('#inbox-box').innerHTML = inbox.length ? `
+    <h2 class="sec-title">받은 친구 요청 <small>${inbox.length}건</small></h2>` +
+    inbox.map(r => `
+      <div class="req">
+        <div class="req-who">
+          <strong>${esc(r.nick)}</strong>
+          <small>${esc(r.code)} · ${daysAgo(r.at)}</small>
+        </div>
+        <div class="req-act">
+          <button class="mini ok" data-yes="${esc(r.id)}">수락</button>
+          <button class="mini no" data-no="${esc(r.id)}">거부</button>
+        </div>
+      </div>`).join('') : '';
+
+  $$('#inbox-box [data-yes]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.yes;
+    const r  = inbox.find(x => x.id === id);
+    b.disabled = true;
+    if (!await acceptRequest(id)) {
+      b.disabled = false;
+      toast('수락하지 못했습니다. 잠시 뒤 다시 시도해 주세요.');
+      return;
+    }
+    if (r) adoptFriend(r.code, r.nick, id);
+    inbox = inbox.filter(x => x.id !== id);
+    checkBadges(); save(); render4();
+    toast((r ? r.nick + ' 님과 ' : '') + '친구가 되었습니다');
+  });
+
+  $$('#inbox-box [data-no]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.no;
+    b.disabled = true;
+    if (!await dropRequest(id, S.anglerId)) {
+      b.disabled = false;
+      toast('거부하지 못했습니다. 잠시 뒤 다시 시도해 주세요.');
+      return;
+    }
+    inbox = inbox.filter(x => x.id !== id);
+    render4();
+    toast('요청을 거부했습니다');
+  });
+
+  /* F-13 보낸 요청 — 상대가 수락할 때까지 기다린다 */
+  $('#pending-box').innerHTML = S.pending.length ? `
+    <h2 class="sec-title">보낸 요청 <small>${S.pending.length}건</small></h2>` +
+    S.pending.map(p => `
+      <div class="req">
+        <div class="req-who">
+          <strong>${esc(p.nick || p.code)}</strong>
+          <small>${p.sent ? esc(p.code) + ' · 수락을 기다리는 중'
+                          : '서버에 못 보냈습니다 — 이 기기에서만 대기 중'}</small>
+        </div>
+        <div class="req-act">${p.sent
+          ? `<button class="mini no" data-cancel="${esc(p.code)}">취소</button>`
+          : `<button class="mini" data-accept="${esc(p.code)}">데모: 수락됨</button>`}
+        </div>
+      </div>`).join('') : '';
+
+  $$('#pending-box [data-cancel]').forEach(b => b.onclick = async () => {
+    const code = b.dataset.cancel;
+    const p    = S.pending.find(x => x.code === code);
+    b.disabled = true;
+    if (p && p.id && !await dropRequest(S.anglerId, p.id)) {
+      b.disabled = false;
+      toast('취소하지 못했습니다. 잠시 뒤 다시 시도해 주세요.');
+      return;
+    }
+    S.pending = S.pending.filter(x => x.code !== code);
+    save(); render4();
+    toast('요청을 취소했습니다');
+  });
+
+  /* 서버에 못 올린 요청만 남는 흉내내기 — 상대 기기가 없을 때 흐름을 보여 준다 */
   $$('#pending-box [data-accept]').forEach(b => b.onclick = () => {
     const code = b.dataset.accept;
-    S.pending = S.pending.filter(x => x !== code);
-    S.friends.push(makeFriend(code));
+    S.pending = S.pending.filter(x => x.code !== code);
+    adoptFriend(code, null, null);
     checkBadges(); save(); render4();
-    toast('친구가 연결되었습니다');
+    toast('친구가 연결되었습니다 (데모)');
   });
 
   /* F-15 랭킹 */
@@ -3386,23 +3475,51 @@ $('#btn-add-friend').onclick = async () => {
   }
   if (v === myCode()) { msg.textContent = '내 코드입니다.'; return; }
   if (S.friends.some(f => f.code === v)) { msg.textContent = '이미 연결된 친구입니다.'; return; }
-  if (S.pending.indexOf(v) !== -1) { msg.textContent = '이미 요청을 보냈습니다.'; return; }
+  if (S.pending.some(p => p.code === v)) { msg.textContent = '이미 요청을 보냈습니다.'; return; }
+
+  /* 상대가 먼저 나에게 보냈다면, 또 보내지 말고 그 요청을 수락한다 */
+  const mine = inbox.find(x => x.code === v);
+  if (mine) {
+    btn.disabled = true;
+    msg.textContent = '수락하는 중입니다…';
+    const ok = await acceptRequest(mine.id);
+    btn.disabled = false;
+    if (!ok) { msg.textContent = '수락하지 못했습니다. 잠시 뒤 다시 시도해 주세요.'; return; }
+    adoptFriend(mine.code, mine.nick, mine.id);
+    inbox = inbox.filter(x => x.id !== mine.id);
+    checkBadges(); save();
+    msg.textContent = mine.nick + ' 님이 먼저 요청을 보내 두셨어요 — 바로 연결했습니다.';
+    $('#code-input').value = '';
+    render4();
+    return;
+  }
 
   /* 있는 코드인지 서버에 물어본다. 못 물어보면 예전처럼 그냥 받아 준다 —
      서버가 잠깐 안 된다고 친구 추가까지 막을 이유는 없다. */
   btn.disabled = true;
   msg.textContent = '코드를 확인하는 중입니다…';
   const r = await lookupCode(v);
-  btn.disabled = false;
 
   if (r.state === 'none') {
+    btn.disabled = false;
     msg.textContent = '그 코드를 쓰는 사람이 없습니다. 다시 확인해 주세요.'; return;
   }
 
-  S.pending.push(v); save();
-  msg.textContent = r.state === 'found'
+  /* 서버에 요청을 올린다. 못 올려도 막지는 않고, 이 기기에서만 대기로 남긴다. */
+  const sent = r.state === 'found' ? await sendRequest(r.row.id) : false;
+  btn.disabled = false;
+
+  S.pending.push({
+    code: v,
+    nick: r.row ? r.row.nickname : null,
+    id  : r.row ? r.row.id       : null,
+    sent: sent
+  });
+  save();
+
+  msg.textContent = sent
     ? r.row.nickname + ' 님에게 요청을 보냈습니다. 상대가 수락하면 연결됩니다.'
-    : '요청을 보냈습니다. 상대가 수락하면 연결됩니다.';
+    : '서버에 요청을 올리지 못했습니다. 이 기기에서만 대기 중으로 남겨 두겠습니다.';
   $('#code-input').value = '';
   render4();
 };
@@ -3591,13 +3708,24 @@ function go(id) {
   $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.go === id));
   window.scrollTo(0,0);
   if (id === 's-dex') render3();
-  if (id === 's-friends') render4();
+  if (id === 's-friends') { render4(); syncFriends(); }
   if (id === 's-settings') render5();
   if (id === 's-catch') initCatch();
   /* 숨어 있는 동안 지도는 크기를 0으로 알고 있다 — 돌아오면 다시 알려준다 */
   if (id === 's-today' && MAP.obj) setTimeout(() => MAP.obj.invalidateSize(), 60);
 }
 $$('.tab').forEach(t => t.onclick = () => go(t.dataset.go));
+
+/* 친구 화면을 보고 있는 동안만 서버를 확인한다.
+   다른 화면이거나 탭이 숨어 있으면 두드릴 이유가 없다. */
+setInterval(() => {
+  if (document.hidden) return;
+  if (!$('#s-friends').classList.contains('on')) return;
+  syncFriends();
+}, 20000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && $('#s-friends').classList.contains('on')) syncFriends();
+});
 
 $$('[data-sort]').forEach(b => b.onclick = () => {
   $$('[data-sort]').forEach(x => x.classList.remove('on'));
@@ -3857,6 +3985,133 @@ async function lookupCode(code) {
     .maybeSingle();
   if (error) { console.warn('[낚시민족] 코드 조회 실패', error); return { state: 'offline' }; }
   return data ? { state: 'found', row: data } : { state: 'none' };
+}
+
+/* ── 친구 요청 ─────────────────────────────────────────────
+   fp_friend_request 에 줄이 있으면 "대기 중"이다. 수락하면 fp_friend 두 줄로
+   옮겨 가고 그 줄은 사라지며, 거부·취소도 그냥 지운다. 그래서 상태가 하나뿐이고
+   따로 상태 컬럼을 두지 않았다.
+
+   서버가 없거나 실패해도 예전처럼 로컬로만 돌아간다 — 조용히 넘어간다. */
+
+let inbox = [];        /* 받은 요청. 저장하지 않고 매번 서버에서 새로 받는다 */
+let syncing = false;
+
+async function sendRequest(toId) {
+  const c = sb();
+  if (!c || !S.anglerId) return false;
+  const { error } = await c.from('fp_friend_request')
+    .insert({ from_id: S.anglerId, to_id: toId });
+  if (!error) return true;
+  if (error.code === '23505') return true;   /* 이미 보낸 요청 — 대기 중인 건 같다 */
+  console.warn('[낚시민족] 친구 요청 실패', error);
+  return false;
+}
+
+/* 수락은 내 줄과 상대 줄을 함께 넣어야 하는데, fp_friend 정책은 내 줄만
+   허락한다. 그래서 서버 함수 하나로 묶어 두었다. */
+async function acceptRequest(fromId) {
+  const c = sb();
+  if (!c) return false;
+  const { data, error } = await c.rpc('fp_accept_friend', { p_from: fromId });
+  if (error) { console.warn('[낚시민족] 수락 실패', error); return false; }
+  return data === true;
+}
+
+/* 거부(받은 쪽)와 취소(보낸 쪽)는 결국 같은 삭제다 */
+async function dropRequest(fromId, toId) {
+  const c = sb();
+  if (!c) return false;
+  const { error } = await c.from('fp_friend_request').delete()
+    .eq('from_id', fromId).eq('to_id', toId);
+  if (error) { console.warn('[낚시민족] 요청 삭제 실패', error); return false; }
+  return true;
+}
+
+/* 확정된 친구를 로컬 목록에 넣는다.
+   조과는 아직 서버에 없으므로 지금까지처럼 코드로 만들어 낸 데모 기록을 쓰고,
+   닉네임만 서버의 진짜 값으로 덮는다. */
+function adoptFriend(code, nick, anglerId) {
+  if (S.friends.some(f => f.code === code)) return false;
+  const f = makeFriend(code);
+  if (nick) f.nick = nick;
+  f.anglerId = anglerId || null;
+  S.friends.push(f);
+  return true;
+}
+
+/* 받은 요청과 확정된 친구를 서버에서 가져와 화면 상태에 맞춘다.
+   보낸 요청의 결말은 줄의 유무로 읽는다 —
+     줄이 남아 있으면 대기 중, 사라졌는데 친구가 됐으면 수락,
+     사라졌는데 친구도 아니면 거부(또는 내가 취소한 것). */
+async function syncFriends() {
+  const c = sb();
+  if (!c || !S.anglerId || syncing) return;
+  syncing = true;
+  try {
+    /* RLS 가 내 것만 돌려주므로 따로 거를 필요가 없다 */
+    const [reqRes, friRes] = await Promise.all([
+      c.from('fp_friend_request').select('from_id, to_id, created_at'),
+      c.from('fp_friend').select('friend_id').eq('angler_id', S.anglerId)
+    ]);
+    if (reqRes.error || friRes.error) {
+      console.warn('[낚시민족] 친구 동기화 실패', reqRes.error || friRes.error);
+      return;
+    }
+
+    const reqs      = reqRes.data || [];
+    const friendIds = (friRes.data || []).map(r => r.friend_id);
+
+    /* 닉네임·코드를 한 번에 받아 둔다 */
+    const ids = Array.from(new Set(
+      reqs.map(r => r.from_id).concat(reqs.map(r => r.to_id)).concat(friendIds)
+    )).filter(id => id && id !== S.anglerId);
+
+    const who = {};
+    if (ids.length) {
+      const { data } = await c.from('fp_angler')
+        .select('id, invite_code, nickname').in('id', ids);
+      (data || []).forEach(a => { who[a.id] = a; });
+    }
+
+    inbox = reqs.filter(r => r.to_id === S.anglerId).map(r => ({
+      id  : r.from_id,
+      code: (who[r.from_id] || {}).invite_code || '알 수 없음',
+      nick: (who[r.from_id] || {}).nickname   || '낚시인',
+      at  : r.created_at
+    }));
+
+    const stillWaiting = new Set(
+      reqs.filter(r => r.from_id === S.anglerId).map(r => r.to_id));
+
+    let added = 0;
+    friendIds.forEach(fid => {
+      const a = who[fid];
+      if (a && adoptFriend(a.invite_code, a.nickname, fid)) added++;
+    });
+
+    let declined = 0;
+    S.pending = S.pending.filter(p => {
+      if (!p.sent || !p.id) return true;                 /* 서버에 못 올린 건 그대로 둔다 */
+      if (stillWaiting.has(p.id)) return true;           /* 아직 대기 중 */
+      if (friendIds.indexOf(p.id) !== -1) return false;  /* 수락돼서 친구가 됐다 */
+      declined++; return false;                          /* 거부됐다 */
+    });
+
+    if (added || declined) {
+      checkBadges(); save();
+      toast(added && declined ? `친구 ${added}명 연결 · 요청 ${declined}건 거절됨`
+          : added            ? `${added}명과 친구가 되었습니다`
+          :                    '보낸 친구 요청이 거절되었습니다');
+    } else {
+      save();
+    }
+    if ($('#s-friends').classList.contains('on')) render4();
+  } catch (e) {
+    console.warn('[낚시민족] 친구 동기화 실패', e);
+  } finally {
+    syncing = false;
+  }
 }
 
 myCode();
