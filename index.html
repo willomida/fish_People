@@ -961,6 +961,38 @@ const FISH = [
     ban:null, minLen:null, grade:'invasive', para:null, edible:true,
     note:'생태계교란 생물. 배스와 마찬가지로 살아있는 채로 방류 금지.' },
 
+  { id:'steedbarbel', name:'누치', water:'민물', emoji:'🐟',
+    vision:{hue:[30,60], sat:[.1,.35], val:[.3,.65], ratio:[3.4,4.4]},
+    habitat:'큰 강 본류의 자갈·모래 바닥', season:'4~10월',
+    avg:35, big:55, life:'최대 60cm',
+    bait:['지렁이','떡밥','옥수수'],
+    ban:null, minLen:null, grade:null, para:'high', edible:true,
+    note:'입이 아래로 향한 빨판 모양이다. 잉어과라 생식은 금물.' },
+
+  { id:'bullhead', name:'동자개(빠가사리)', water:'민물', emoji:'🐡',
+    vision:{hue:[35,60], sat:[.25,.6], val:[.2,.5], ratio:[3.2,4.2]},
+    habitat:'강 중하류의 돌 틈과 뻘바닥', season:'5~9월(야간)',
+    avg:15, big:25, life:'최대 30cm',
+    bait:['지렁이','새우'],
+    ban:null, minLen:null, grade:null, para:'mid', edible:true,
+    note:'가슴·등지느러미 가시에 독이 있어 맨손으로 쥐면 아프다. 매운탕감으로 인기.' },
+
+  { id:'skygager', name:'강준치', water:'민물', emoji:'🐟',
+    vision:{hue:[150,220], sat:[.05,.3], val:[.45,.8], ratio:[4.0,5.5]},
+    habitat:'댐호·큰 강의 표층', season:'5~10월',
+    avg:35, big:60, life:'최대 70cm',
+    bait:['루어(스푼)','작은 미노우'],
+    ban:null, minLen:null, grade:null, para:'high', edible:true,
+    note:'표층에서 작은 물고기를 쫓는다. 잔가시가 많아 먹기는 번거롭다.' },
+
+  { id:'chub', name:'끄리', water:'민물', emoji:'🐠',
+    vision:{hue:[140,210], sat:[.1,.4], val:[.4,.75], ratio:[3.6,4.8]},
+    habitat:'강 여울과 본류', season:'5~9월',
+    avg:25, big:40, life:'최대 45cm',
+    bait:['루어(스푼·미노우)'],
+    ban:null, minLen:null, grade:null, para:'high', edible:true,
+    note:'입이 크게 벌어지고 아래턱이 튀어나왔다. 루어에 잘 반응한다.' },
+
   /* ── 보호·멸종위기 (민물) ── */
   { id:'gamdol', name:'감돌고기', water:'민물', emoji:'🐠',
     vision:{hue:[30,60], sat:[.1,.35], val:[.25,.55], ratio:[3.2,4.2]},
@@ -1137,7 +1169,79 @@ const FISH = [
     avg:22, big:35, life:'최대 40cm',
     bait:['크릴 밑밥','작은 바늘'],
     ban:null, minLen:null, grade:null, para:null, edible:true,
-    note:'아래턱만 길게 튀어나온 독특한 생김새.' }
+    note:'아래턱만 길게 튀어나온 독특한 생김새.' },
+
+  { id:'greenling', name:'쥐노래미(놀래미)', water:'바다', emoji:'🐟',
+    vision:{hue:[25,60], sat:[.15,.5], val:[.2,.5], ratio:[3.4,4.4]},
+    habitat:'연안 암초와 해조밭', season:'9~2월',
+    avg:25, big:40, life:'최대 50cm',
+    bait:['청갯지렁이','지그헤드 웜'],
+    ban:null, minLen:20, grade:null, para:null, edible:true,
+    note:'방파제에서 흔히 올라온다. 20cm 미만은 방류 대상.' },
+
+  { id:'goby', name:'문절망둑(망둥어)', water:'바다', emoji:'🐟',
+    vision:{hue:[30,60], sat:[.1,.4], val:[.25,.6], ratio:[4.0,5.5]},
+    habitat:'하구·갯벌의 뻘바닥', season:'9~11월',
+    avg:15, big:25, life:'최대 30cm',
+    bait:['청갯지렁이'],
+    ban:null, minLen:null, grade:null, para:null, edible:true,
+    note:'초보자도 쉽게 잡는 가을 손맛. 아이들과 나가기 좋다.' },
+
+  { id:'spanishmackerel', name:'삼치', water:'바다', emoji:'🐟',
+    vision:{hue:[180,220], sat:[.15,.45], val:[.35,.7], ratio:[4.5,6.0]},
+    habitat:'외해 표층·조류 소통 좋은 곳', season:'9~11월',
+    avg:50, big:90, life:'최대 1m',
+    bait:['메탈 지그','미노우'],
+    ban:null, minLen:null, grade:null, para:null, edible:true,
+    note:'이빨이 날카로워 목줄이 쉽게 잘린다. 와이어 채비를 쓴다.' },
+
+  { id:'congereel', name:'붕장어(아나고)', water:'바다', emoji:'🐟',
+    vision:{hue:[30,70], sat:[.1,.4], val:[.15,.4], ratio:[7.0,11.0]},
+    habitat:'모래·뻘 바닥, 방파제 밑', season:'6~10월(야간)',
+    avg:45, big:80, life:'최대 1m',
+    bait:['청갯지렁이','생선살'],
+    ban:null, minLen:35, grade:null, para:null, edible:true,
+    note:'야간에 잘 문다. 피에 독이 있어 반드시 익혀 먹는다.' },
+
+  { id:'amberjack', name:'방어', water:'바다', emoji:'🐟',
+    vision:{hue:[180,220], sat:[.1,.4], val:[.35,.7], ratio:[3.6,4.6]},
+    habitat:'외해 중층, 선상', season:'11~2월',
+    avg:60, big:100, life:'최대 1.2m',
+    bait:['메탈 지그','생미끼'],
+    ban:null, minLen:null, grade:null, para:null, edible:true,
+    note:'겨울이 제철. 부시리와 닮았는데 위턱 뒷모서리가 각진 쪽이 방어다.' },
+
+  { id:'sandfish', name:'도루묵', water:'바다', emoji:'🐟',
+    vision:{hue:[35,70], sat:[.1,.35], val:[.35,.7], ratio:[3.4,4.4]},
+    habitat:'동해 연안, 겨울 산란기에 연안으로', season:'11~12월',
+    avg:18, big:25, life:'최대 28cm',
+    bait:['카고 채비','작은 바늘'],
+    ban:null, minLen:null, grade:null, para:null, edible:true,
+    note:'겨울 동해의 별미. 시·도별로 포획 제한을 두는 해가 있어 확인이 필요하다.' },
+
+  { id:'brownsole', name:'참가자미', water:'바다', emoji:'🐟',
+    vision:{hue:[25,55], sat:[.1,.35], val:[.2,.5], ratio:[1.4,2.0]},
+    habitat:'모래·펄 바닥', season:'3~6월',
+    avg:25, big:35, life:'최대 40cm',
+    bait:['청갯지렁이','원투 채비'],
+    ban:null, minLen:20, grade:null, para:null, edible:true,
+    note:'도다리와 마찬가지로 눈이 오른쪽에 있다. 20cm 미만은 방류.' },
+
+  { id:'goldeye', name:'불볼락(열기)', water:'바다', emoji:'🐠',
+    vision:{hue:[350,30], sat:[.25,.6], val:[.25,.6], ratio:[2.4,3.2]},
+    habitat:'깊은 암초대, 선상', season:'11~4월',
+    avg:20, big:30, life:'최대 35cm',
+    bait:['카드 채비','작은 지그'],
+    ban:null, minLen:15, grade:null, para:null, edible:true,
+    note:'붉은 몸에 눈이 크다. 여러 마리가 한 번에 올라오는 카드 채비로 노린다.' },
+
+  { id:'bigfinsquid', name:'흰꼴뚜기(무늬오징어)', water:'바다', emoji:'🦑',
+    vision:{hue:[330,30], sat:[.1,.45], val:[.4,.8], ratio:[1.8,2.6]},
+    habitat:'해조밭·연안 암초대', season:'9~12월',
+    avg:20, big:35, life:'외투장 40cm',
+    bait:['에기(무늬오징어 전용)'],
+    ban:null, minLen:null, grade:null, para:null, edible:true,
+    note:'에깅의 대표 대상. 지느러미가 몸통 전체를 둘러 넓다.' }
 ];
 
 /* 어종 상세 화면에 붙일 학술정보 조각. 자료가 없는 어종은 아무것도 안 그린다. */
@@ -1164,7 +1268,7 @@ function nifsBlock(id) {
    미호종개·흰수마자·퉁사리는 이 API 에 없어 빠져 있다.
    dia = 지역에서 부르는 다른 이름(방언). 어르신들이 실제로 쓰는 말이라 함께 보여준다.
    ─────────────────────────────────────────────────────── */
-const NIFS = {"crucian":{"sci":"Carassius auratus","eng":"Crusian carp","order":"잉어목","family":"잉어과","dia":"떡붕어, 뚱붕어, 보치붕어, 붕애, 붕어지, 빰치, 청붕어, 희나리","code":"670707"},"carp":{"sci":"Cyprinus carpio","eng":"common carp","order":"잉어목","family":"잉어과","code":"671402"},"mandarin":{"sci":"Siniperca scherzeri","eng":"Mandarin fish","order":"검정우럭목","family":"쏘가리과","dia":"금잉어, 소갈이, 쏘래기","code":"671104"},"catfish":{"sci":"Silurus asotus","eng":"Far eastern catfish","order":"메기목","family":"메기과","dia":"미거지, 미기","code":"670304"},"snakehead":{"sci":"Channa argus","eng":"Snake head","order":"버들붕어목","family":"가물치과","dia":"가마치, 가무치, 까마치"},"eel":{"sci":"Anguilla japonica","eng":"Eel","order":"뱀장어목","family":"뱀장어과","dia":"궁자, 배암쟁이, 장치, 짱어","code":"670601"},"sweetfish":{"sci":"Plecoglossus altivelis","eng":"Ayu","order":"바다빙어목","family":"은어과","dia":"언어","code":"670801"},"minnow":{"sci":"Zacco platypus","eng":"Pale chub","order":"잉어목","family":"왜몰개과","dia":"피라지, 피래미, 피리, 행베리","code":"671412"},"bass":{"sci":"Micropterus salmoides","eng":"Large mouth bass","order":"검정우럭목","family":"검정우럭과","code":"614803"},"bluegill":{"sci":"Lepomis macrochirus","eng":"Blue gill","order":"검정우럭목","family":"검정우럭과","code":"614804"},"gamdol":{"sci":"Pseudopungtungia nigra","eng":"Black shinner","order":"잉어목","family":"모래무지과","dia":"금강돗쟁이"},"eoreumchi":{"sci":"Hemibarbus mylodon","eng":"Spotted barbel","order":"잉어목","family":"모래무지과"},"blackporgy":{"sci":"Acanthopagrus schlegelii","eng":"Black porgy","order":"양쥐돔목","family":"양쥐돔과","dia":"감성어, 감상어(전남), 감성도미(경북), 감셍이(부산), 구릿(제주도), 맹이, 남정바리(강원도)"},"redseabream":{"sci":"Pagrus major","eng":"Red seabream","order":"양쥐돔목","family":"양쥐돔과","code":"612302"},"flounder":{"sci":"Paralichthys olivaceus","eng":"Bastard halibut","jpn":"ヒラメ","order":"전갱이목","family":"넙치과","dia":"광에, 도다리, 광어, 넙","code":"611301"},"rockfish":{"sci":"Sebastes schlegelii","eng":"Korean rockfish","order":"농어목","family":"양볼락과","dia":"우레기","code":"613406"},"seabass":{"sci":"Lateolabrax japonicus","eng":"Seaperch","family":"농어과","dia":"까지맥이, 깔다구, 깔대기, 깡다구, 껄떡, 농에, 독도돔, 연어병치, 까지맥이, 깔다구, 껄떡이, 농에","code":"611601"},"darkbanded":{"sci":"Sebastes inermis","eng":"Dark-banded rockfish","order":"농어목","family":"양볼락과","dia":"뽈낙이, 뽈낙구, 열기, 순볼래기(전남), 꺽저구(경북), 열광이, 우레기, 구럭(함남), 열갱이(강원)"},"mackerel":{"sci":"Scomber japonicus","eng":"Chub mackerel","jpn":"Common mackerel,","order":"고등어목","family":"고등어과","dia":"가라지, 고도리, 꼬등어, 소고도리, 고도리, 고도어, 고동어, 고망어, 소고도리, 열소고도리, 통소고도리","code":"610504"},"horsemackerel":{"sci":"Trachurus japonicus","eng":"Jack mackerel","order":"전갱이목","family":"전갱이과","dia":"각재기, 매가리, 아지, 전겡이, 가라지, 각재기, 매생이, 메가리, 빈쟁이, 전광어"},"hairtail":{"sci":"Trichiurus japonicus","order":"고등어목","family":"갈치과"},"codfish":{"sci":"Gadus macrocephalus","eng":"Pacific cod","order":"대구목","family":"대구과","dia":"대구어, 대두어(통영), 대기(함남)","code":"612015"},"righteye":{"sci":"Pseudopleuronectes yokohamae","eng":"Marbled flounder","order":"전갱이목","family":"가자미과"},"squid":{"sci":"Todarodes pacificus","eng":"Flying squid","order":"개안목","family":"살오징어과","dia":"오징어, 피둥어꼴뚜기, 물오징어","code":"640301"},"octopus_s":{"sci":"Amphioctopus fangsiao","eng":"Webfoot octopus","order":"문어목","family":"문어과","dia":"쭈게미, 쭈깨미, 쭉지미, 호래기, 금테문어, 죽거미, 쯔그미, Octopus ocellatus","code":"640701"},"crab":{"sci":"Portunus trituberculatus","eng":"Swimming crab","order":"십각목","family":"꽃게과","dia":"꽃그이, 날개꽃게","code":"630205"},"gizzard":{"sci":"Konosirus punctatus","eng":"Konoshiro gizzard shad","order":"청어목","family":"전어과","code":"615502"},"mullet":{"sci":"Mugil cephalus","eng":"Common mullet","order":"숭어목","family":"숭어과","dia":"글거지, 동어, 모댕이, 모치, 몰치, 수치 마루쟁이, 옹어, 저푸리, 은숭어","code":"614308"},"halfbeak":{"sci":"Hyporhamphus sajori","eng":"Half beak","order":"동갈치목","family":"학공치과","dia":"꽁치, 사요리, 사이루, 청갈치, 곰능이, 공매리, 공미리, 공치, 굉메리, 순붕이, 청망어"}};
+const NIFS = {"crucian":{"sci":"Carassius auratus","eng":"Crusian carp","order":"잉어목","family":"잉어과","dia":"떡붕어, 뚱붕어, 보치붕어, 붕애, 붕어지, 빰치, 청붕어, 희나리","code":"670707"},"carp":{"sci":"Cyprinus carpio","eng":"common carp","order":"잉어목","family":"잉어과","code":"671402"},"mandarin":{"sci":"Siniperca scherzeri","eng":"Mandarin fish","order":"검정우럭목","family":"쏘가리과","dia":"금잉어, 소갈이, 쏘래기","code":"671104"},"catfish":{"sci":"Silurus asotus","eng":"Far eastern catfish","order":"메기목","family":"메기과","dia":"미거지, 미기","code":"670304"},"snakehead":{"sci":"Channa argus","eng":"Snake head","order":"버들붕어목","family":"가물치과","dia":"가마치, 가무치, 까마치"},"eel":{"sci":"Anguilla japonica","eng":"Eel","order":"뱀장어목","family":"뱀장어과","dia":"궁자, 배암쟁이, 장치, 짱어","code":"670601"},"sweetfish":{"sci":"Plecoglossus altivelis","eng":"Ayu","order":"바다빙어목","family":"은어과","dia":"언어","code":"670801"},"minnow":{"sci":"Zacco platypus","eng":"Pale chub","order":"잉어목","family":"왜몰개과","dia":"피라지, 피래미, 피리, 행베리","code":"671412"},"bass":{"sci":"Micropterus salmoides","eng":"Large mouth bass","order":"검정우럭목","family":"검정우럭과","code":"614803"},"bluegill":{"sci":"Lepomis macrochirus","eng":"Blue gill","order":"검정우럭목","family":"검정우럭과","code":"614804"},"gamdol":{"sci":"Pseudopungtungia nigra","eng":"Black shinner","order":"잉어목","family":"모래무지과","dia":"금강돗쟁이"},"eoreumchi":{"sci":"Hemibarbus mylodon","eng":"Spotted barbel","order":"잉어목","family":"모래무지과"},"blackporgy":{"sci":"Acanthopagrus schlegelii","eng":"Black porgy","order":"양쥐돔목","family":"양쥐돔과","dia":"감성어, 감상어(전남), 감성도미(경북), 감셍이(부산), 구릿(제주도), 맹이, 남정바리(강원도)"},"redseabream":{"sci":"Pagrus major","eng":"Red seabream","order":"양쥐돔목","family":"양쥐돔과","code":"612302"},"flounder":{"sci":"Paralichthys olivaceus","eng":"Bastard halibut","jpn":"ヒラメ","order":"전갱이목","family":"넙치과","dia":"광에, 도다리, 광어, 넙","code":"611301"},"rockfish":{"sci":"Sebastes schlegelii","eng":"Korean rockfish","order":"농어목","family":"양볼락과","dia":"우레기","code":"613406"},"seabass":{"sci":"Lateolabrax japonicus","eng":"Seaperch","family":"농어과","dia":"까지맥이, 깔다구, 깔대기, 깡다구, 껄떡, 농에, 독도돔, 연어병치, 까지맥이, 깔다구, 껄떡이, 농에","code":"611601"},"darkbanded":{"sci":"Sebastes inermis","eng":"Dark-banded rockfish","order":"농어목","family":"양볼락과","dia":"뽈낙이, 뽈낙구, 열기, 순볼래기(전남), 꺽저구(경북), 열광이, 우레기, 구럭(함남), 열갱이(강원)"},"mackerel":{"sci":"Scomber japonicus","eng":"Chub mackerel","jpn":"Common mackerel,","order":"고등어목","family":"고등어과","dia":"가라지, 고도리, 꼬등어, 소고도리, 고도리, 고도어, 고동어, 고망어, 소고도리, 열소고도리, 통소고도리","code":"610504"},"horsemackerel":{"sci":"Trachurus japonicus","eng":"Jack mackerel","order":"전갱이목","family":"전갱이과","dia":"각재기, 매가리, 아지, 전겡이, 가라지, 각재기, 매생이, 메가리, 빈쟁이, 전광어"},"hairtail":{"sci":"Trichiurus japonicus","order":"고등어목","family":"갈치과"},"codfish":{"sci":"Gadus macrocephalus","eng":"Pacific cod","order":"대구목","family":"대구과","dia":"대구어, 대두어(통영), 대기(함남)","code":"612015"},"righteye":{"sci":"Pseudopleuronectes yokohamae","eng":"Marbled flounder","order":"전갱이목","family":"가자미과"},"squid":{"sci":"Todarodes pacificus","eng":"Flying squid","order":"개안목","family":"살오징어과","dia":"오징어, 피둥어꼴뚜기, 물오징어","code":"640301"},"octopus_s":{"sci":"Amphioctopus fangsiao","eng":"Webfoot octopus","order":"문어목","family":"문어과","dia":"쭈게미, 쭈깨미, 쭉지미, 호래기, 금테문어, 죽거미, 쯔그미, Octopus ocellatus","code":"640701"},"crab":{"sci":"Portunus trituberculatus","eng":"Swimming crab","order":"십각목","family":"꽃게과","dia":"꽃그이, 날개꽃게","code":"630205"},"gizzard":{"sci":"Konosirus punctatus","eng":"Konoshiro gizzard shad","order":"청어목","family":"전어과","code":"615502"},"mullet":{"sci":"Mugil cephalus","eng":"Common mullet","order":"숭어목","family":"숭어과","dia":"글거지, 동어, 모댕이, 모치, 몰치, 수치 마루쟁이, 옹어, 저푸리, 은숭어","code":"614308"},"halfbeak":{"sci":"Hyporhamphus sajori","eng":"Half beak","order":"동갈치목","family":"학공치과","dia":"꽁치, 사요리, 사이루, 청갈치, 곰능이, 공매리, 공미리, 공치, 굉메리, 순붕이, 청망어"},"steedbarbel":{"sci":"Hemibarbus labeo","eng":"Steed barbel","order":"잉어목","family":"모래무지과"},"bullhead":{"sci":"Tachysurus sinensis","eng":"Korean bullhead","order":"메기목","family":"동자개과","dia":"바가사리, 빠가, 빠가사리, 쏘가리, 황빠가, 자개","code":"670501"},"skygager":{"sci":"Erythroculter erythropterus","eng":"Skygager","order":"잉어목","family":"잉어과"},"chub":{"sci":"Opsariichthys uncirostris amurensis","eng":"Korean piscivorous chub","order":"잉어목","family":"왜몰개과","dia":"어헤"},"greenling":{"sci":"Hexagrammos otakii","eng":"Fat greenling","order":"농어목","family":"쥐노래미과","dia":"석반어(평남), 게르치(부산)","code":"611401"},"goby":{"sci":"Acanthogobius flavimanus","eng":"Yellowfin goby","order":"망둑어목","family":"짱뚱어과","dia":"망둥어","code":"612402"},"spanishmackerel":{"sci":"Scomberomorus niphonius","eng":"Spanish mackerel","order":"고등어목","family":"고등어과","dia":"고시, 망에, 야내기, 고시, 마어, 망어, 망에","code":"613806"},"congereel":{"sci":"Conger myriaster","eng":"Whitespotted conger","order":"뱀장어목","family":"붕장어과","dia":"붕어지(충남, 황해도), 꾀장어(전남), 장관, 벵찬(함남), 참장어(진도)","code":"615004"},"amberjack":{"sci":"Seriola quinqueradiata","eng":"Amberjack","order":"전갱이목","family":"전갱이과","dia":"무태방어, 마래미(함남), 마르미, 떡마르미, 방치마르미(강원), 사배기(경북)","code":"615122"},"sandfish":{"sci":"Arctoscopus japonicus","eng":"Sailfin sandfish","order":"농어목","family":"도루묵과","dia":"도루묵이, 도루매이, 은어, 도루맥이(함남)","code":"612101"},"brownsole":{"sci":"Pseudopleuronectes herzensteini","eng":"Brown sole","order":"전갱이목","family":"가자미과","dia":"참가재미, 개재미"},"goldeye":{"sci":"Sebastes thompsoni","eng":"Goldeye rockfish","order":"농어목","family":"양볼락과","code":"613428"},"bigfinsquid":{"sci":"Sepioteuthis lessoniana","eng":"Big fin reef squid","order":"폐안목","family":"꼴뚜기과","dia":"날개꼴뚜기, 흰오징어","code":"640502"}};
 
 /* ── 낚시 포인트 ─────────────────────────────────────────
    type: '민물' | '바다',  night: 야간 가능,  park: 주차,  wc: 화장실
@@ -1365,7 +1469,27 @@ const BADGES = [
   { id:'b_spot3',   icon:'🗺️', name:'탐험가',       desc:'서로 다른 스팟 3곳에서 기록',
     check:s => new Set(s.catches.map(c => c.spotId).filter(Boolean)).size >= 3 },
   { id:'b_friend',  icon:'🤝', name:'동출',         desc:'친구를 1명 이상 연결했다',
-    check:s => s.friends.length >= 1 }
+    check:s => s.friends.length >= 1 },
+
+  { id:'b_dawn',    icon:'🌅', name:'새벽 출조',    desc:'04시~07시 사이에 기록했다',
+    check:s => s.catches.some(c => { const h = new Date(c.at).getHours(); return h >= 4 && h < 7; }) },
+
+  { id:'b_haul',    icon:'🪣', name:'만선',         desc:'하루에 3마리 이상 잡았다',
+    check:s => {
+      const byDay = {};
+      s.catches.forEach(c => { const d = c.at.slice(0,10); byDay[d] = (byDay[d]||0) + 1; });
+      return Object.values(byDay).some(n => n >= 3);
+    } },
+
+  { id:'b_region',  icon:'🚗', name:'전국구',       desc:'서로 다른 시·도 3곳에서 기록했다',
+    check:s => {
+      const sido = new Set();
+      s.catches.forEach(c => {
+        const sp = SPOTS.find(x => x.id === c.spotId);
+        if (sp) sido.add(sp.region.split(' ')[0]);   /* '경기 여주' → '경기' */
+      });
+      return sido.size >= 3;
+    } }
 ];
 
 /* ── 주간 챌린지 풀 (주차 번호로 하나 선택) ───────────── */
