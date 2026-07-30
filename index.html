@@ -235,6 +235,21 @@ button.wide{display:block; width:100%; margin-top:10px}
 .pin-me{border-radius:50%; background:#1d7fa8; border:3px solid #fff;
   box-shadow:0 0 0 4px rgba(29,127,168,.3), 0 1px 4px rgba(0,0,0,.4)}
 .leaflet-container{background:var(--bg); font:inherit; border-radius:14px}
+/* 출처 표시는 라이선스상 남겨야 하므로, 지우는 대신 최대한 눈에 안 띄게 */
+.leaflet-control-attribution{
+  font-size:9px; line-height:1.4; padding:0 4px; opacity:.5;
+  background:rgba(255,255,255,.55); color:#333; border-radius:6px 0 0 0;
+}
+.leaflet-control-attribution a{color:#333}
+:root[data-theme="dark"] .leaflet-control-attribution,
+.leaflet-control-attribution:hover{opacity:.75}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .leaflet-control-attribution{
+    background:rgba(20,26,32,.55); color:#ccc }
+  :root:not([data-theme="light"]) .leaflet-control-attribution a{color:#ccc}
+}
+:root[data-theme="dark"] .leaflet-control-attribution{background:rgba(20,26,32,.55); color:#ccc}
+:root[data-theme="dark"] .leaflet-control-attribution a{color:#ccc}
 .leaflet-popup-content{margin:11px 13px; font-size:13.5px; line-height:1.5}
 .leaflet-popup-content b{font-size:15px}
 .leaflet-popup-content .go{display:inline-block; margin-top:7px; color:var(--sea-l);
@@ -2335,9 +2350,12 @@ function initMap() {
     maxBoundsViscosity: 1.0,
     maxZoom: 19
   });
+  /* 출처 표시 — OpenStreetMap 은 ODbL 라이선스라 표기가 의무이므로 지울 수 없다.
+     대신 의무가 아닌 'Leaflet' 링크는 빼고, 글자는 작고 흐리게 줄여 둔다(아래 CSS). */
+  MAP.obj.attributionControl.setPrefix(false);
   MAP.tiles = L.tileLayer(TILES[isDarkNow() ? 'dark' : 'light'], {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap 기여자'
+    attribution: '&copy; OpenStreetMap'
   }).addTo(MAP.obj);
   /* 사용자가 직접 끌거나 휠로 확대하면, 그 뒤로는 앱이 멋대로 화면을 되돌리지 않는다.
      (날씨는 2분마다 새로 받아오는데, 그때마다 보던 자리로 튕기면 못 쓴다)
