@@ -13,14 +13,17 @@ import Anthropic from '@anthropic-ai/sdk';
 const MODEL = 'claude-opus-5';
 
 /* 우리 사이트에서 온 요청만 받는다.
+   도메인을 적어 두는 대신 요청이 도착한 호스트와 대조한다 — 그래야 별칭 주소,
+   배포마다 생기는 미리보기 주소, 나중에 붙일 커스텀 도메인이 전부 그냥 통한다.
    Origin 은 브라우저 밖(curl 등)에서 위조할 수 있으니 완전한 방어가 아니다.
    진짜 마지막 방어선은 Anthropic 콘솔의 지출 한도(Spend limit)다. */
-const ALLOW_ORIGIN = [
-  'https://fish-people.vercel.app',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://localhost:5500',
-];
+function sameSite(origin, host) {
+  if (!origin) return true;                    /* 같은 출처면 브라우저가 아예 안 붙인다 */
+  let h;
+  try { h = new URL(origin).host; } catch { return false; }
+  if (h === host) return true;
+  return /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(h);   /* 로컬 개발 */
+}
 
 /* 같은 인스턴스가 살아 있는 동안만 세는 간이 제한.
    콜드 스타트마다 초기화되고 인스턴스끼리 공유도 안 되지만,
@@ -80,8 +83,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: 'method' });
   }
 
-  const origin = req.headers.origin || '';
-  if (origin && !ALLOW_ORIGIN.includes(origin)) {
+  if (!sameSite(req.headers.origin, req.headers.host)) {
     return res.status(403).json({ ok: false, error: 'origin' });
   }
 
